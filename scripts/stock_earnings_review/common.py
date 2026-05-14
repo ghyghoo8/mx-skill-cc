@@ -28,8 +28,10 @@ def default_output_root() -> Path:
     return DEFAULT_OUTPUT_DIR
 
 _API_KEY_PLACEHOLDER = "<EM_API_KEY_PLACEHOLDER>"
-EM_API_KEY = os.environ.get("EM_API_KEY", "em_1e2ez8IA2ljmrw08Q98LMZe8lSD6Tzy7").strip() or _API_KEY_PLACEHOLDER
+EM_API_KEY = os.environ.get("EM_API_KEY", "").strip() or _API_KEY_PLACEHOLDER
 
+if not EM_API_KEY:
+    raise ValueError("EM_API_KEY 环境变量未设置")
 @dataclass
 class EntityInfo:
     class_code: str

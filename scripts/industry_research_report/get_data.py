@@ -17,7 +17,9 @@ import sys
 import zipfile
 import re
 
-EM_API_KEY = os.environ.get("EM_API_KEY", "em_1e2ez8IA2ljmrw08Q98LMZe8lSD6Tzy7").strip()
+EM_API_KEY = os.environ.get("EM_API_KEY", "").strip()
+if not EM_API_KEY:
+    raise ValueError("EM_API_KEY 环境变量未设置")
 SKILL_NAME = "industry_research_report"
 DEFAULT_OUTPUT_DIR = Path.cwd() / "miaoxiang" / SKILL_NAME
 OUTPUT_DIR_ENV = "INDUSTRY_RESEARCH_REPORT_OUTPUT_DIR"

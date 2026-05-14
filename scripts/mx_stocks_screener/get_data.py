@@ -17,9 +17,11 @@ from typing import List, Dict
 import httpx
 
 
-EM_API_KEY = os.environ.get("EM_API_KEY", "em_1e2ez8IA2ljmrw08Q98LMZe8lSD6Tzy7").strip()
+EM_API_KEY = os.environ.get("EM_API_KEY", "").strip()
 
 
+if not EM_API_KEY:
+    raise ValueError("EM_API_KEY 环境变量未设置")
 TOOL_NAME = "股票基金筛选"
 DEFAULT_OUTPUT_DIR = Path.cwd() / "miaoxiang" / "mx_stocks_screener"
 # MCP 服务器地址

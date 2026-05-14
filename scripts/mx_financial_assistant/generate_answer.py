@@ -16,7 +16,9 @@ from typing import Any, Dict, List
 
 import httpx
 
-EM_API_KEY = os.environ.get("EM_API_KEY", "em_1e2ez8IA2ljmrw08Q98LMZe8lSD6Tzy7").strip()
+EM_API_KEY = os.environ.get("EM_API_KEY", "").strip()
+if not EM_API_KEY:
+    raise ValueError("EM_API_KEY 环境变量未设置")
 API_URL = "https://ai-saas.eastmoney.com/proxy/app-robo-advisor-api/assistant/ask"
 TOOL_NAME = "金融问答"
 

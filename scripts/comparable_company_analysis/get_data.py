@@ -13,7 +13,9 @@ from typing import Any, Dict, List
 from urllib import error as urllib_error
 from urllib import request as urllib_request
 
-EM_API_KEY = os.environ.get("EM_API_KEY", "em_1e2ez8IA2ljmrw08Q98LMZe8lSD6Tzy7").strip()
+EM_API_KEY = os.environ.get("EM_API_KEY", "").strip()
+if not EM_API_KEY:
+    raise ValueError("EM_API_KEY 环境变量未设置")
 COMPARE_API_URL = "https://ai-saas.eastmoney.com/proxy/app-robo-advisor-api/assistant/comparable-company-analysis"
 TIMEOUT_SECONDS = 60
 

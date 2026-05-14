@@ -18,9 +18,11 @@ from pathlib import Path
 from typing import Any, Dict
 import httpx
 
-EM_API_KEY = os.environ.get("EM_API_KEY", "em_1e2ez8IA2ljmrw08Q98LMZe8lSD6Tzy7").strip()
+EM_API_KEY = os.environ.get("EM_API_KEY", "").strip()
 # ─────────────────────────── 配置 ───────────────────────────
 
+if not EM_API_KEY:
+    raise ValueError("EM_API_KEY 环境变量未设置")
 FIRST_COVERAGE_URL = (
     "https://ai-saas.eastmoney.com/proxy/app-robo-advisor-api/assistant/write/initial-coverage"
 )
