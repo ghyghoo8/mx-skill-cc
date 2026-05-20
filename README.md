@@ -24,7 +24,11 @@ git clone git@github.com:ghyghoo8/mx-skill-cc.git .claude/skills/mx-skills
 ### 依赖安装
 
 ```bash
+# mx-skills 主路（14 个子技能）
 pip3 install httpx pandas openpyxl --user
+
+# a-stock-data 补充层（仅 A 股的实时/筹码/资金面/龙虎榜等互补能力）
+pip3 install mootdx requests stockstats --user
 ```
 
 ### 环境变量配置
@@ -76,6 +80,22 @@ cp .env.example .env
 | 12 | 热点发现 | A股市场热点总览与热门方向识别 | Markdown |
 | 13 | 可比公司分析 | 同业对比、经营+估值横向比较 | Excel |
 | 14 | 专题研究 | 主题投资、事件驱动、跨行业深度研究 | PDF + DOCX |
+
+### 补充能力层 — a-stock-data（仅 A 股，免费免 Key）
+
+Vendor 自 [simonlin1212/a-stock-data](https://github.com/simonlin1212/a-stock-data)（Apache-2.0，V3.1）。覆盖 mx-skills 没有的实时盘口、筹码、资金面能力；也作为 mx-skills 配额耗尽时的降级源。
+
+| 层 | Reference | 互补能力 |
+|---|---|---|
+| Layer 1 行情 | `references/a_stock_market_data.md` | mootdx K线/盘口、腾讯 PE/PB/市值、百度 K线带 MA |
+| Layer 2 研报 | `references/a_stock_research.md` | 东财 PDF 下载、同花顺一致预期 EPS、**iwencai NL 主题检索** |
+| Layer 3 信号 | `references/a_stock_signals.md` | **龙虎榜、解禁、北向、题材归因、概念板块、行业排名、分钟级资金流** |
+| Layer 4 资金面 | `references/a_stock_capital_flow.md` | **融资融券、大宗交易、股东户数、分红送转、120 日资金流** |
+| Layer 5 新闻 | `references/a_stock_news.md` | 东财个股新闻、财联社快讯、全球资讯 |
+| Layer 6 基础数据 | `references/a_stock_fundamentals.md` | mootdx 财务 37 字段/F10、新浪三表 |
+| Layer 7 公告 | `references/a_stock_filings.md` | 巨潮公告全文检索 |
+
+调用模式 D：模型读 reference → 直接 `python3 -c "<内嵌代码>"` 执行 → 返回 Python 值（不写文件）。详见 `SKILL.md` 路由规则。
 
 ## 使用限额
 
@@ -151,6 +171,19 @@ mx-skills/
     ├── ...
     └── stock_earnings_review_business_logic.md
 ```
+
+## 致谢 / Credits
+
+本仓库的 **a-stock-data 补充能力层** vendor 自：
+
+- 项目主页：**[simonlin1212/a-stock-data](https://github.com/simonlin1212/a-stock-data)**
+- 版本：V3.1（2026-05-19，commit `2dd95e3c`）
+- 作者：**Simon 林**（抖音「Simon林」 / 公众号「硅基世纪」）
+- License：Apache License 2.0
+
+上游单文件 `SKILL.md`（70KB，覆盖 7 层架构 / 28 个端点 / 13 个数据源）按层拆分为 8 个 reference 文件（`references/a_stock_*.md`），保留原作者署名与许可声明。本地针对 2026 年后部分接口漂移做了 4 处 patch（详见每个文件 frontmatter 的 `patch_notes`，以及 `scripts/a_stock_data/smoke_test.py` 的回归验证）。完整 Apache-2.0 声明见仓库根目录 `NOTICE`。
+
+感谢 Simon 林开源这套高质量的 A 股数据工具集——它让 mx-skills 在妙想付费配额耗尽时拥有了可靠的免费降级源，也补齐了龙虎榜、解禁日历、北向资金、题材归因等 mx-skills 原本不覆盖的能力。如果它帮到了你的投研工作流，欢迎到[上游赞赏作者](https://github.com/simonlin1212/a-stock-data#donate)。
 
 ## 免责声明
 

@@ -45,8 +45,9 @@ description: >
 
 | 变量名 | 说明 | 来源 |
 |---|---|---|
-| `EM_API_KEY` | 东方财富妙想 API Key | 优先从环境变量读取；默认已配置在 `{baseDir}/.env` 中 |
+| `EM_API_KEY` | 东方财富妙想 API Key（#1-#14 必需） | 优先从环境变量读取；默认已配置在 `{baseDir}/.env` 中 |
 | `EM_API_KEY_POOL` | 多 Token 配额轮换（逗号分隔，如 `em_xxx,em_yyy`） | 可选；当前脚本仅读取 `EM_API_KEY`，多 Token 轮换需由**上层封装**实现 |
+| `IWENCAI_API_KEY` | iwencai NL 语义检索 Key（仅 #16 a_stock_research 的 NL 检索需要） | 可选；申请见 https://www.iwencai.com/skillhub |
 
 如需自定义 Key，可设置环境变量覆盖：
 ```bash
@@ -118,10 +119,42 @@ pip3 install httpx pandas openpyxl --user
 | 13 | 可比公司分析、同业对比、经营+估值横向比较 | 可比公司分析 | `references/comparable_company_analysis.md` | `scripts/comparable_company_analysis/`（get_data.py + excel_theme.py） |
 | 14 | 专题研究报告、主题投资、事件驱动研究 | 专题研究 | `references/topic_research_report.md` | `scripts/topic_research_report/get_data.py` |
 
+### 补充能力层（仅 A 股）—— a-stock-data 互补/降级源
+
+下列条目走**内嵌 Python**模式（约定 D，见下文），不走 `scripts/` 子进程。所有 a-stock-data 层执行前必须先读 `references/a_stock_data_common.md`。
+
+| # | 用户意图 | 子技能 | Reference 文件 | 调用模式 |
+|---|---|---|---|---|
+| 15 | A 股**实时盘口/五档/涨跌停价/K线带 MA**（mx 配额耗尽时也降级到这里） | A股行情层 | `references/a_stock_market_data.md` | 内嵌 Python（D） |
+| 16 | A 股**研报 PDF 下载、iwencai NL 主题检索、同花顺一致预期 EPS** | A股研报层 | `references/a_stock_research.md` | 内嵌 Python（D） |
+| 17 | A 股**龙虎榜（个股/全市场）、限售解禁、北向资金、概念板块归属、同花顺题材归因、行业涨跌排名、个股资金流分钟级** | A股信号层 | `references/a_stock_signals.md` | 内嵌 Python（D） |
+| 18 | A 股**融资融券、大宗交易、股东户数变化、分红送转历史、个股资金流 120 日** | A股资金面/筹码层 | `references/a_stock_capital_flow.md` | 内嵌 Python（D） |
+| 19 | A 股**个股新闻、财联社快讯、东财全球资讯**（mx 资讯搜索配额耗尽时降级） | A股新闻层 | `references/a_stock_news.md` | 内嵌 Python（D） |
+| 20 | A 股**财务 37 字段、F10 九大类、新浪三表**（mx 金融数据查询配额耗尽时降级） | A股基础数据层 | `references/a_stock_fundamentals.md` | 内嵌 Python（D） |
+| 21 | A 股**巨潮公告全文检索**（mx 资讯搜索配额耗尽时降级） | A股公告层 | `references/a_stock_filings.md` | 内嵌 Python（D） |
+
 **路由冲突时的优先级规则**：
 - 若用户请求包含明确的报告类型关键词（如"业绩点评""行业报告""深度研究"），优先按报告类型匹配。
 - 若用户请求是笼统的问答型（如"帮我看看""分析一下"），优先走金融问答（#1），由金融问答内部再决定是否调用数据/搜索能力。
 - 若用户明确要求数据/文件输出（如"导出 Excel""生成 CSV"），优先走对应的数据查询类技能。
+
+### mx-skills vs a-stock-data 路由优先级（A 股专用）
+
+```
+A 股 + 互补能力（龙虎榜 / 解禁 / 北向 / 题材归因 / 概念板块 / 融资融券 / 大宗交易 / 股东户数 / 分红送转 / iwencai NL 检索 / 实时盘口/五档）
+  → 直接走 a-stock-data 对应层（#15-#21），mx-skills 无对等能力
+
+A 股 + 重叠能力（基础行情 / 个股新闻 / 个股财务 / 公告检索）
+  → 默认走 mx-skills 主路（#1-#14）
+  → 若脚本 stdout/stderr 出现限流字样则降级到 a-stock-data 对应层：
+     - `quota exceeded` / `rate limit` / `调用次数已达上限` / HTTP 429
+  → 降级映射：
+     - mx_finance_data 配额耗尽 → a_stock_market_data + a_stock_fundamentals
+     - mx_finance_search 配额耗尽 → a_stock_news + a_stock_filings
+
+非 A 股（港股/美股/基金/宏观/可转债/ETF/全市场选股/AI 报告生成）
+  → 强制 mx-skills，**禁用** a-stock-data 降级（a-stock-data 仅覆盖 A 股）
+```
 
 ---
 
@@ -176,6 +209,28 @@ Saved: /path/to/miaoxiang/stock_diagnosis/stock_diagnosis_xxx.md
 
 - 通过正则提取 `Saved:` 后的文件路径
 - Markdown 内容可直接展示给用户
+
+#### D. 内嵌 Python 直接执行类（a-stock-data 补充层 #15-#21）
+
+不走 `scripts/` 子进程，模型直接读 reference 文件、复制内嵌的 Python 代码段，用 `python3 -c "..."` 执行：
+
+```bash
+# 例：执行 a_stock_signals.md 中的"龙虎榜"代码块
+python3 -c "
+import requests
+UA='Mozilla/5.0 ...'
+DATACENTER_URL='https://datacenter-web.eastmoney.com/api/data/v1/get'
+def eastmoney_datacenter(...): ...
+def dragon_tiger_board(code, trade_date, look_back=30): ...
+print(dragon_tiger_board('002475', '2026-05-17'))
+"
+```
+
+- **执行前必读 `references/a_stock_data_common.md`**（含 `UA`、`DATACENTER_URL`、`eastmoney_datacenter()` helper、ticker 归一化），它是 Layer 1-7 所有代码段的依赖
+- 输出是 **Python 值/dict/list/DataFrame**，**不写文件**——直接 `print()` 或在 Python 内组装 Markdown 后展示
+- 鉴权：除 iwencai 外全部免费免 key；iwencai 需 `IWENCAI_API_KEY` 环境变量（仅 #16 研报 NL 检索需要）
+- 依赖：`pip install mootdx requests pandas stockstats`（与 mx-skills 的 `httpx pandas openpyxl` 并存）
+- **仅 A 股**：港股、美股、基金、宏观禁用此模式，强制回到 #1-#14
 
 ### 超时配置
 
@@ -384,3 +439,14 @@ python3 -u {baseDir}/scripts/.../get_data.py ...
 - `references/stock_market_hotspot_discovery.md` — 热点发现规范
 - `references/comparable_company_analysis.md` — 可比公司分析规范
 - `references/topic_research_report.md` — 专题研究报告规范
+
+### a-stock-data 补充层（仅 A 股，调用模式 D）
+
+- `references/a_stock_data_common.md` — **必读**：共享 helper、UA、ticker 归一化、东财 datacenter helper、估值公式、调研流程、FAQ
+- `references/a_stock_market_data.md` — Layer 1 行情层（mootdx + 腾讯 + 百度 K线）
+- `references/a_stock_research.md` — Layer 2 研报层（东财 PDF + 同花顺一致预期 + iwencai NL）
+- `references/a_stock_signals.md` — Layer 3 信号层（同花顺热点 + 北向 + 概念板块 + 龙虎榜 + 解禁 + 行业排名 + 分钟级资金流）
+- `references/a_stock_capital_flow.md` — Layer 4 资金面/筹码层（融资融券 + 大宗交易 + 股东户数 + 分红送转 + 120 日资金流）
+- `references/a_stock_news.md` — Layer 5 新闻层（东财个股新闻 + 财联社快讯 + 全球资讯）
+- `references/a_stock_fundamentals.md` — Layer 6 基础数据层（mootdx 财务 37 字段/F10 + 东财个股基本面 + 新浪三表）
+- `references/a_stock_filings.md` — Layer 7 公告层（巨潮公告全文检索）
