@@ -1,0 +1,47 @@
+mx-skills
+=========
+
+This repository includes vendored material from third-party projects.
+Each is retained under its original license; attribution and license
+notices below must be preserved per their license terms.
+
+
+a-stock-data (Apache License 2.0)
+---------------------------------
+
+Project:   simonlin1212/a-stock-data
+URL:       https://github.com/simonlin1212/a-stock-data
+Version:   V3.1
+Commit:    2dd95e3c7cc8cd9ec43dbaeaab16bae938b69e0f
+Date:      2026-05-19
+Author:    Simon 林 (抖音「Simon林」 / 公众号「硅基世纪」)
+License:   Apache License, Version 2.0
+           https://www.apache.org/licenses/LICENSE-2.0
+
+Vendored content was split from the upstream single-file SKILL.md
+into the following files under `references/`:
+
+    a_stock_data_common.md      (intro + prerequisites + helpers + valuation
+                                 formulas + research workflows + data-source
+                                 priority + FAQ)
+    a_stock_market_data.md      (Layer 1: mootdx + Tencent + Baidu K-line)
+    a_stock_research.md         (Layer 2: Eastmoney + THS + iwencai)
+    a_stock_signals.md          (Layer 3: THS hot stocks, Northbound, Baidu
+                                 concept blocks, Eastmoney fund flow minute,
+                                 dragon-tiger list, lockup calendar, industry
+                                 ranking)
+    a_stock_capital_flow.md     (Layer 4: margin trading, block trades,
+                                 holder count, dividends, 120-day fund flow)
+    a_stock_news.md             (Layer 5: Eastmoney stock news, CLS flash,
+                                 Eastmoney global news)
+    a_stock_fundamentals.md     (Layer 6: mootdx finance/F10, Eastmoney
+                                 basic info, Sina financial statements)
+    a_stock_filings.md          (Layer 7: cninfo full-text filings)
+
+Modifications: each file has a frontmatter block added (upstream commit
+SHA, version, date, license tag) and a "在 mx-skills 中的使用方式" header
+note describing how the router invokes the inline-Python code blocks.
+The original code and prose are otherwise unchanged.
+
+The full Apache-2.0 license text applies to the vendored content above
+and is available at the URL listed.
