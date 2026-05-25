@@ -173,8 +173,17 @@ def stock_fund_flow_120d(code: str) -> list[dict]:
         "fields2": "f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61,f62,f63,f64,f65",
         "lmt": "120",
     }
-    r = requests.get(url, params=params, headers={"User-Agent": UA}, timeout=15)
-    d = r.json()
+    headers = {
+        "User-Agent": UA,
+        "Referer": "https://quote.eastmoney.com/",
+        "Origin": "https://quote.eastmoney.com",
+    }
+    try:
+        r = requests.get(url, params=params, headers=headers, timeout=15)
+        d = r.json()
+    except Exception as e:
+        print(f"[WARN] push2 资金流请求失败: {e}")
+        return []
     klines = d.get("data", {}).get("klines", [])
 
     rows = []

@@ -249,8 +249,17 @@ def eastmoney_fund_flow_minute(code: str) -> list[dict]:
         "fields1": "f1,f2,f3,f7",
         "fields2": "f51,f52,f53,f54,f55,f56,f57",
     }
-    r = requests.get(url, params=params, timeout=10)
-    d = r.json()
+    headers = {
+        "User-Agent": UA,
+        "Referer": "https://quote.eastmoney.com/",
+        "Origin": "https://quote.eastmoney.com",
+    }
+    try:
+        r = requests.get(url, params=params, headers=headers, timeout=10)
+        d = r.json()
+    except Exception as e:
+        print(f"[WARN] push2 资金流请求失败: {e}")
+        return []
 
     rows = []
     for line in d.get("data", {}).get("klines", []):
