@@ -75,6 +75,16 @@ PYTHONUNBUFFERED=1 python3 -u scripts/.../get_data.py --query "..."
 
 Report-generation scripts (industry research, deep dive, topic research, earnings review) routinely take **1–5 minutes**. Set timeouts ≥ 300s; do not retry on apparent hangs — the backend may be queued.
 
+## Regression test for vendored patches
+
+The only test in the repo is `scripts/a_stock_data/smoke_test.py` — it hits one representative endpoint per a-stock-data layer to verify the 4 local patches (see each `a_stock_*.md` frontmatter's `patch_notes`) still match upstream behavior. Run after editing any `references/a_stock_*.md`:
+
+```bash
+python3 scripts/a_stock_data/smoke_test.py
+```
+
+Exit 0 = all non-SKIPped cases pass. `mootdx` cases SKIP without a CN IP; `iwencai` cases SKIP without `IWENCAI_API_KEY`. There is no test for the mx-skills main path — those scripts hit a paid quota-gated API.
+
 ## Quotas and entity limits (load-bearing)
 
 - `mx_finance_data` truncates to **5 entities per call** silently and notes the truncation in the description txt. When changing this script, do not relax the limit without also updating `SKILL.md` and `references/mx_finance_data.md`.

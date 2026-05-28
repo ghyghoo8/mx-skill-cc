@@ -64,6 +64,33 @@ cp .env.example .env
 
 ## 技能列表
 
+> **上游快照版本**：基于东方财富妙想官方技能包 **2026-03-18** 发布版本 vendor 而来（本地快照日期 2026-05-28）。
+> 各子技能上游版本号见下表 `meta.json` 列；本地相对上游的差异：①移除脚本中硬编码的默认 API Key，强制读取环境变量；②为 4 个 reference 文档补充「调用配额」说明段落。
+> 后续上游升级时，可使用本仓库当前快照作为基准进行 diff 合并。
+
+<details>
+<summary>各子技能上游版本号（点击展开）</summary>
+
+| 技能 | 上游 slug | 版本 | 发布日期 |
+|---|---|---|---|
+| 金融问答 | `mx-financial-assistant` | 1.0.4 | 2026-03-16 |
+| 金融数据查询 | `mx-finance-data` | 1.0.13 | 2026-03-18 |
+| 金融资讯搜索 | `mx-finance-search` | 1.0.11 | 2026-03-18 |
+| 宏观经济数据 | `mx-macro-data` | 1.0.14 | 2026-03-18 |
+| 智能选股 | `mx-stocks-screener` | 1.0.17 | 2026-03-18 |
+| 行业研究报告 | `industry-research-report` | 1.0.5 | 2026-03-16 |
+| 个股/行业跟踪 | `industry-stock-tracker` | 1.0.4 | 2026-03-16 |
+| 首次覆盖/深度研究 | `initiation-of-coverage-or-deep-dive` | 1.0.6 | 2026-03-16 |
+| 业绩点评 | `stock-earnings-review` | 1.0.5 | 2026-03-16 |
+| 股票诊断 | `stock-diagnosis` | 1.0.3 | 2026-03-16 |
+| 基金诊断 | `fund-diagnosis` | 1.0.2 | 2026-03-16 |
+| 热点发现 | `stock-market-hotspot-discovery` | 1.0.2 | 2026-03-16 |
+| 可比公司分析 | `comparable-company-analysis` | 1.0.2 | 2026-03-16 |
+| 专题研究 | `topic-research-report` | 1.0.2 | 2026-03-16 |
+| _私域知识库检索（未集成）_ | `mx-personal-kb-search` | 1.0.0 | 2026-03-16 |
+
+</details>
+
 | # | 技能 | 能力 | 输出格式 |
 |---|---|---|---|
 | 1 | 金融问答 | 自然语言问答（数据/资讯/知识/分析） | Markdown + 溯源参考 |
