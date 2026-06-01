@@ -3,9 +3,9 @@ name: a_stock_capital_flow
 description: A股资金面/筹码层 — 融资融券、大宗交易、股东户数变化、分红送转历史、个股资金流120日
 metadata:
   upstream: simonlin1212/a-stock-data
-  upstream_commit: 2dd95e3c7cc8cd9ec43dbaeaab16bae938b69e0f
-  upstream_version: 3.1
-  upstream_date: 2026-05-19
+  upstream_commit: b428fad2
+  upstream_version: 3.2.1
+  upstream_date: 2026-05-30
   license: Apache-2.0
   author: Simon 林
   layer: Layer 4 资金面/筹码层
@@ -179,7 +179,7 @@ def stock_fund_flow_120d(code: str) -> list[dict]:
         "Origin": "https://quote.eastmoney.com",
     }
     try:
-        r = requests.get(url, params=params, headers=headers, timeout=15)
+        r = em_get(url, params=params, headers=headers, timeout=15)
         d = r.json()
     except Exception as e:
         print(f"[WARN] push2 资金流请求失败: {e}")

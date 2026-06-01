@@ -3,15 +3,15 @@ name: a_stock_news
 description: A股新闻层 — 东财个股新闻、财联社快讯、东财全球资讯
 metadata:
   upstream: simonlin1212/a-stock-data
-  upstream_commit: 2dd95e3c7cc8cd9ec43dbaeaab16bae938b69e0f
-  upstream_version: 3.1
-  upstream_date: 2026-05-19
+  upstream_commit: b428fad2
+  upstream_version: 3.2.1
+  upstream_date: 2026-05-30
   license: Apache-2.0
   author: Simon 林
   layer: Layer 5 新闻层
   patched: true
   patch_notes:
-    - "2026-05-20 mx-skills: §5.1 东财 search-api-web JSONP 接口对纯股票代码 keyword 不再返回 cmsArticleWebOld（改返 passportWeb 用户档案），改用 np-listapi.eastmoney.com /comm/web/getListInfo + mTypeAndCode 拉个股新闻流"
+    - "2026-05-20 mx-skills: §5.1 东财 search-api-web JSONP 接口对纯股票代码 keyword 不再返回 cmsArticleWebOld（改返 passportWeb 用户档案），改用 np-listapi.eastmoney.com /comm/web/getListInfo + mTypeAndCode 拉个股新闻流。上游 v3.2.1 对 §5.1 走了不同修法（仍用 search-api jsonp，只修 cmsArticleWebOld 为直接列表）——但 2026-06-01 实测该 jsonp 对纯代码仍仅返回 passportWeb（0 条新闻），np-listapi 返回 10 条，故保留本 patch"
 ---
 
 > Vendored from [simonlin1212/a-stock-data](https://github.com/simonlin1212/a-stock-data) (Apache-2.0, V3.1 @ 2026-05-19, commit 2dd95e3c).
@@ -25,7 +25,9 @@ metadata:
 
 ### 5.1 东财个股新闻 — mx-skills patched
 
-> **mx-skills patch（2026-05-20）**：上游 V3.1 用 `search-api-web.eastmoney.com/search/jsonp` 以 `keyword=<code>` 搜索 `cmsArticleWebOld`，2026 后该接口对纯 6 位股票代码不再返回文章列表（改返 `passportWeb` 用户档案匹配）。改用东财专门的个股新闻流接口 `np-listapi.eastmoney.com/comm/web/getListInfo`，直接按 `mTypeAndCode=<market>.<code>` 拉新闻。
+> **mx-skills patch（2026-05-20，2026-06-01 复核保留）**：上游 V3.1 用 `search-api-web.eastmoney.com/search/jsonp` 以 `keyword=<code>` 搜索 `cmsArticleWebOld`，2026 后该接口对纯 6 位股票代码不再返回文章列表（改返 `passportWeb` 用户档案匹配）。改用东财专门的个股新闻流接口 `np-listapi.eastmoney.com/comm/web/getListInfo`，直接按 `mTypeAndCode=<market>.<code>` 拉新闻。
+>
+> **与上游 v3.2.1 的分歧**：上游 v3.2.1 对 §5.1 也做了修复，但走的是「保留 search-api jsonp、把 `cmsArticleWebOld` 当作直接列表解析」的路子。2026-06-01 实测：该 jsonp 对纯股票代码仍只返回 `passportWeb`（`cmsArticleWebOld` 为 0 条），而本 patch 的 np-listapi 接口返回 10 条有效新闻。故**保留本地 np-listapi 修法**，不回退到上游版本。
 
 ```python
 import requests
@@ -39,14 +41,14 @@ def eastmoney_stock_news(code: str, page_size: int = 20) -> list[dict]:
     """
     mt = (f"1.{code}" if code.startswith(("6", "9"))
           else (f"7.{code}" if code.startswith("8") else f"0.{code}"))
-    r = requests.get(
+    r = em_get(  # 东财端点，走 em_get 内置限流（见 a_stock_data_common.md）
         "https://np-listapi.eastmoney.com/comm/web/getListInfo",
         params={
             "client": "web", "biz": "web_n_pc_n_xinwen", "trackID": "",
             "mTypeAndCode": mt, "type": "1",
             "pageSize": str(page_size), "pageIndex": "1", "callback": "",
         },
-        headers={"User-Agent": UA, "Referer": "https://so.eastmoney.com/"},
+        headers={"Referer": "https://so.eastmoney.com/"},
         timeout=15,
     )
     d = (r.json().get("data") or {})
@@ -67,7 +69,12 @@ for n in news[:5]:
     print(f"  {n['time']} | {n['title'][:60]}")
 ```
 
-### 5.2 财联社快讯（直连 cls.cn）
+### 5.2 财联社快讯（直连 cls.cn）— ⚠️ 已下线，改用 §5.3
+
+> **⚠️ 2026-05 已失效（上游 #14）：** 财联社网站迁移到 Next.js 架构，旧版公开接口
+> `cls.cn/nodeapi/telegraphList` 全面下线（返回 404），新版 API 需签名认证，无法
+> 公开 HTTP 调用。**全市场实时快讯请改用 §5.3「东财全球资讯」**（7×24 滚动，免费无 key）。
+> 下面代码仅作历史参考，已不可用。
 
 ```python
 import requests
@@ -118,7 +125,7 @@ def eastmoney_global_news(page_size: int = 50) -> list[dict]:
         "req_trace": str(uuid.uuid4()),
     }
     headers = {"User-Agent": UA, "Referer": "https://kuaixun.eastmoney.com/"}
-    r = requests.get(url, params=params, headers=headers, timeout=10)
+    r = em_get(url, params=params, headers=headers, timeout=10)
     d = r.json()
 
     rows = []

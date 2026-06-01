@@ -3,15 +3,15 @@ name: a_stock_data_common
 description: A股全栈数据工具包 — 共享层（依赖、市场前缀、ticker 归一化、东财 datacenter helper、估值公式、调研流程、数据源优先级、FAQ）。所有 a_stock_* reference 文件执行前必读。
 metadata:
   upstream: simonlin1212/a-stock-data
-  upstream_commit: 2dd95e3c7cc8cd9ec43dbaeaab16bae938b69e0f
-  upstream_version: 3.1
-  upstream_date: 2026-05-19
+  upstream_commit: b428fad2
+  upstream_version: 3.2.1
+  upstream_date: 2026-05-30
   license: Apache-2.0
   author: Simon 林
   layer: common
 ---
 
-> Vendored from [simonlin1212/a-stock-data](https://github.com/simonlin1212/a-stock-data) (Apache-2.0, V3.1 @ 2026-05-19, commit 2dd95e3c).
+> Vendored from [simonlin1212/a-stock-data](https://github.com/simonlin1212/a-stock-data) (Apache-2.0, V3.2.1 @ 2026-05-30, commit b428fad2).
 > Author: Simon 林 — please retain this attribution per Apache-2.0. See repo-root `NOTICE`.
 >
 > **在 mx-skills 中的使用方式**：本文件包含所有 7 层共用的辅助函数和常量。Router 路由到任何 `a_stock_*` 层之前，应先读取本文件以获取 `UA`、`DATACENTER_URL`、`eastmoney_datacenter()`、ticker 归一化规则等。
@@ -52,9 +52,9 @@ metadata:
 └── 个股资金流120日 → 主力/大单/中单/小单 日级净流入 (push2his)
 
 新闻层
-├── 东财个股新闻   → 个股相关新闻 (search-api-web JSONP)
-├── 财联社快讯     → 全市场实时电报 (cls.cn)
-└── 东财全球资讯   → 7×24 财经快讯 (np-weblist)
+├── 东财个股新闻   → 个股相关新闻 (np-listapi getListInfo, mx-skills patched)
+├── 财联社快讯     → ⚠️ 已下线 (cls.cn 迁 Next.js，旧API 404)
+└── 东财全球资讯   → 7×24 财经快讯 (np-weblist，财联社替代)
 
 基础数据层
 ├── mootdx finance → 季报快照 (37字段, EPS/ROE/净利)
@@ -66,6 +66,53 @@ metadata:
 ├── 巨潮 cninfo    → 公告全文检索+下载 (cninfo.com.cn)
 └── mootdx F10     → 最新公告摘要
 ```
+
+---
+
+## 数据源优先级 & 东财防封（重要，先读）
+
+### 优先级原则：能用通达信/腾讯，就别用东财
+
+| 优先级 | 数据源 | 协议 | 封 IP 风险 | 覆盖 |
+|--------|--------|------|-----------|------|
+| **1（首选）** | **mootdx（通达信）** | TCP 7709 二进制 | **不封 IP** | K线、五档盘口、逐笔成交、财务快照、F10 |
+| **2** | **腾讯财经** | HTTP GBK | **不封 IP** | 实时价、PE/PB/市值/换手率/涨跌停、指数、ETF |
+| **3** | 新浪 / 巨潮 / 同花顺 | HTTP | 低 | 财报三表、公告、一致预期/热点 |
+| **4（仅独有数据才用）** | **东财 eastmoney** | HTTP | **有风控，会封 IP** | 见下 |
+
+**凡是行情 / K线 / 实时价 / 市值 / 财务三表能从 mootdx 或腾讯拿到的，一律走它们**——TCP 协议和腾讯接口实测不封 IP，可放心高频调用。
+
+### 东财只用于它「独有、别处拿不到」的数据
+
+下列数据**只有东财有**，通达信/腾讯/新浪都没有，必须用东财（但要限流）：
+
+> 龙虎榜席位 · 全市场龙虎榜 · 限售解禁日历 · 融资融券 · 大宗交易 · 股东户数 · 分红送转 · 个股资金流向（分钟/日级）· 行业板块排名 · 研报列表/PDF · 个股新闻 · 全球资讯
+
+### 东财风控阈值（社区实测，2026-05）
+
+| 行为 | 触发封禁的阈值 | 风险 |
+|------|---------------|------|
+| 每秒请求数 | > 5 次/秒 | 高 |
+| 单 IP 并发连接 | ≥ 10 | 高 |
+| 1 分钟请求总数 | ≥ 200 次 | 中高 |
+| 5 分钟请求总数 | ≥ 300 次 | 触发封禁 |
+| User-Agent | 空 UA / 无浏览器特征 | 中 |
+
+被封表现：连续请求后 `403` / `429` / 连接超时 / 返回空数据。临时封禁通常几分钟到几小时。
+
+### 防封铁律（调用东财时必须遵守）
+
+1. **串行，不并发**——绝不对东财开多线程/协程并发请求
+2. **每次间隔 ≥ 1 秒 + 随机抖动**（QPS ≤ 2），批量筛选时调大到 1.5~2 秒
+3. **复用 HTTP 会话**（Keep-Alive），不要每次新建连接
+4. **带正常 UA + Referer**（本 SKILL 各端点已配好）
+5. **批量场景每只股票之间 sleep**——AI 跑批量循环（如筛选 100 只股逐个拉龙虎榜/资金流）是被封的头号元凶
+
+### 已内置限流：所有东财请求走 `em_get()`
+
+本 SKILL 提供统一的节流入口 `em_get()`（定义见下方「东财数据中心统一查询（共用 helper）」），它自动做到：串行限流（最小间隔 `EM_MIN_INTERVAL=1.0s` + 随机抖动）+ 复用 `EM_SESSION`（Keep-Alive）+ 默认 UA。**所有 `eastmoney.com` 端点的代码块都已改用 `em_get` 而非裸 `requests.get`**，AI 直接抄代码即自带防封。批量任务把 `EM_MIN_INTERVAL` 调大即可进一步降速。
+
+> 注：`em_get` / `EM_SESSION` / `EM_MIN_INTERVAL` 是所有东财代码块共用的前置定义，使用任一东财端点前需先执行「共用 helper」代码块。
 
 ---
 
@@ -152,22 +199,46 @@ def get_prefix(code: str) -> str:
 龙虎榜/解禁/融资融券/大宗交易/股东户数/分红 共用同一 base URL：
 
 ```python
+import time
+import random
 import requests
 
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
 DATACENTER_URL = "https://datacenter-web.eastmoney.com/api/data/v1/get"
 
+# ── 东财防封：全局节流 + 会话复用 ────────────────────────────────────
+# 东财系 HTTP 接口（push2 / datacenter / reportapi / search / np-weblist）有风控：
+#   每秒 >5 次 / 单 IP 并发 ≥10 / 1 分钟 ≥200 次  →  临时封 IP。
+# 所有 eastmoney.com 请求一律走 em_get()：串行限流（最小间隔 + 随机抖动）+ 复用
+# Keep-Alive 会话，批量调用时自动降速，避免被封。详见「数据源优先级 & 东财防封」章节。
+EM_SESSION = requests.Session()
+EM_SESSION.headers.update({"User-Agent": UA})
+EM_MIN_INTERVAL = 1.0          # 两次东财请求最小间隔(秒)；批量筛选建议调大到 1.5~2
+_em_last_call = [0.0]          # 模块级上次请求时间戳
+
+def em_get(url: str, params: dict | None = None, headers: dict | None = None,
+           timeout: int = 15, **kwargs):
+    """东财统一请求入口：自动节流 + 复用 session + 默认 UA。
+    所有 eastmoney.com 接口都应通过它请求，避免高频被封 IP。"""
+    wait = EM_MIN_INTERVAL - (time.time() - _em_last_call[0])
+    if wait > 0:
+        time.sleep(wait + random.uniform(0.1, 0.5))
+    try:
+        return EM_SESSION.get(url, params=params, headers=headers, timeout=timeout, **kwargs)
+    finally:
+        _em_last_call[0] = time.time()
+
 def eastmoney_datacenter(report_name: str, columns: str = "ALL",
                           filter_str: str = "", page_size: int = 50,
                           sort_columns: str = "", sort_types: str = "-1") -> list[dict]:
-    """东财数据中心统一查询 — 龙虎榜/解禁/融资融券/大宗交易/股东户数/分红 共用"""
+    """东财数据中心统一查询 — 龙虎榜/解禁/融资融券/大宗交易/股东户数/分红 共用（已内置限流）"""
     params = {
         "reportName": report_name, "columns": columns,
         "filter": filter_str, "pageNumber": "1", "pageSize": str(page_size),
         "sortColumns": sort_columns, "sortTypes": sort_types,
         "source": "WEB", "client": "WEB",
     }
-    r = requests.get(DATACENTER_URL, params=params, headers={"User-Agent": UA}, timeout=15)
+    r = em_get(DATACENTER_URL, params=params, timeout=15)
     d = r.json()
     if d.get("result") and d["result"].get("data"):
         return d["result"]["data"]

@@ -3,15 +3,15 @@ name: a_stock_fundamentals
 description: A股基础数据层 — mootdx 财务37字段/F10、东财个股基本面、新浪财报三表
 metadata:
   upstream: simonlin1212/a-stock-data
-  upstream_commit: 2dd95e3c7cc8cd9ec43dbaeaab16bae938b69e0f
-  upstream_version: 3.1
-  upstream_date: 2026-05-19
+  upstream_commit: b428fad2
+  upstream_version: 3.2.1
+  upstream_date: 2026-05-30
   license: Apache-2.0
   author: Simon 林
   layer: Layer 6 基础数据层
   patched: true
   patch_notes:
-    - "2026-05-20 mx-skills: §6.4 新浪三表响应结构在 2026 后改变 — 数据不再放在 result.data.lrb/fzb/llb，改为 result.data.report_list[date_value].data。解析路径已更新"
+    - "2026-05-20 mx-skills: §6.4 新浪三表响应结构在 2026 后改变 — 数据不再放在 result.data.lrb/fzb/llb，改为 result.data.report_list[date_value].data。【已退役】上游 v3.2.1（2026-05-30）官方采纳同向修复，§6.4 现直接采用上游版本（扁平记录列表 + num 参数），不再是本地 patch"
 ---
 
 > Vendored from [simonlin1212/a-stock-data](https://github.com/simonlin1212/a-stock-data) (Apache-2.0, V3.1 @ 2026-05-19, commit 2dd95e3c).
@@ -80,7 +80,7 @@ def eastmoney_stock_info(code: str) -> dict:
         "secid": f"{market_code}.{code}",
     }
     headers = {"User-Agent": UA}
-    r = requests.get(url, params=params, headers=headers, timeout=10)
+    r = em_get(url, params=params, headers=headers, timeout=10)
     d = r.json().get("data", {})
     return {
         "code": d.get("f57", ""),
@@ -99,71 +99,61 @@ info = eastmoney_stock_info("688017")
 print(f"{info['name']}({info['code']}): 行业={info['industry']} 总市值={info['mcap']/1e8:.0f}亿 上市={info['list_date']}")
 ```
 
-### 6.4 新浪财报三表 — mx-skills patched（响应结构修正）
+### 6.4 新浪财报三表（直连 quotes.sina.cn）
 
-> **mx-skills patch（2026-05-20）**：上游 V3.1 假设响应结构是 `result.data[<report_type>]`（即 `result.data.lrb`），实际接口在 2026 后改为 `result.data.report_list` 是一个 dict（按报告期 date_value 索引），每项含 `data` 字段（指标项数组）。下面是修正后的解析。
+> **此前为 mx-skills 本地 patch（2026-05-20），上游 v3.2.1（2026-05-30）已官方采纳同向修复，本地 patch 已退役**：上游 V3.1 假设响应结构是 `result.data[<report_type>]`（即 `result.data.lrb`），实际接口在 2026 后改为 `result.data.report_list`（按报告期为键的 dict，每期对象的 `data` 字段才是行项列表）。下面直接采用上游 v3.2.1 版本（新增 `num` 参数，返回「按报告期倒序的扁平记录列表」）。
 
 ```python
 import requests
 
-UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
-
-def sina_financial_report(code: str, report_type: str = "lrb") -> dict:
+def sina_financial_report(code: str, report_type: str = "lrb", num: int = 8) -> list[dict]:
     """
-    新浪财报三表（已修正 2026 后响应结构）。
+    新浪财报三表。
     code: 6位代码
     report_type: "fzb"(资产负债表) / "lrb"(利润表) / "llb"(现金流量表)
-    返回: {
-      "periods": [{date, desc, type}, ...],
-      "data":    {date_value: [{item_field, item_title, item_value, item_tongbi}, ...]}
-    }
+    num: 取最近 N 期（默认 8 期）
+    返回: 按报告期倒序的记录列表，每期一条 dict：
+          {"报告期": "2026-03-31", "<科目>": "<值>", "<科目>_同比": <同比>, ...}
+          （item_value 为新浪原始字符串数值，仅在有同比时附 "_同比" 键）
     """
-    prefix = "sh" if code.startswith(("6", "9")) else "sz"
-    r = requests.get(
-        "https://quotes.sina.cn/cn/api/openapi.php/CompanyFinanceService.getFinanceReport2022",
-        params={
-            "paperCode": f"{prefix}{code}",
-            "source": report_type,
-            "type": "0", "page": "1", "num": "20",
-        },
-        headers={"User-Agent": UA}, timeout=15,
-    )
-    data = ((r.json().get("result") or {}).get("data") or {})
-    periods = [
-        {"date": p.get("date_value"),
-         "desc": p.get("date_description"),
-         "type": p.get("date_type")}
-        for p in (data.get("report_date") or [])
-    ]
-    report_list = data.get("report_list") or {}
-    body = {}
-    for date_value, period_body in report_list.items():
-        body[date_value] = [
-            {"item_field": item.get("item_field"),
-             "item_title": item.get("item_title"),
-             "item_value": item.get("item_value"),
-             "item_tongbi": item.get("item_tongbi")}
-            for item in (period_body.get("data") or [])
-        ]
-    return {"periods": periods, "data": body}
+    prefix = "sh" if code.startswith("6") else "sz"
+    paper_code = f"{prefix}{code}"
+    url = "https://quotes.sina.cn/cn/api/openapi.php/CompanyFinanceService.getFinanceReport2022"
+    params = {
+        "paperCode": paper_code,
+        "source": report_type,
+        "type": "0",
+        "page": "1",
+        "num": str(num),
+    }
+    headers = {"User-Agent": UA}
+    r = requests.get(url, params=params, headers=headers, timeout=15)
+    # 新浪实际结构: result.data.report_list 是「按报告期(如 '20260331')为键」的 dict,
+    # 每期对象的 data 字段才是行项列表 [{item_title, item_value, item_tongbi}]。
+    report_list = r.json().get("result", {}).get("data", {}).get("report_list", {}) or {}
 
-# 用法：利润表
+    rows = []
+    for period in sorted(report_list.keys(), reverse=True)[:num]:
+        obj = report_list[period]
+        rec = {"报告期": f"{period[:4]}-{period[4:6]}-{period[6:8]}"}
+        for it in obj.get("data", []) or []:
+            title = it.get("item_title", "")
+            if not title or it.get("item_value") is None:
+                continue
+            rec[title] = it.get("item_value")
+            tongbi = it.get("item_tongbi")
+            if tongbi not in (None, ""):
+                rec[title + "_同比"] = tongbi
+        rows.append(rec)
+    return rows
+
+# 用法: 利润表
 lrb = sina_financial_report("600519", "lrb")
-print(f"共 {len(lrb['periods'])} 个报告期")
-for p in lrb["periods"][:3]:
-    print(f"  {p['date']} {p['desc']}")
+for item in lrb[:3]:
+    print(f"报告期: {item.get('报告期', '')} 净利润: {item.get('净利润', '')}")
 
-# 取最新报告期的"营业总收入"和"净利润"
-latest_date = lrb["periods"][0]["date"]
-for item in lrb["data"][latest_date]:
-    if item["item_title"] in ("营业总收入", "归属于母公司所有者的净利润"):
-        tongbi = item.get("item_tongbi")
-        tb_str = f"同比 {float(tongbi)*100:.2f}%" if tongbi else ""
-        print(f"  {item['item_title']}: {item['item_value']} {tb_str}")
-
-# 用法: 资产负债表 / 现金流量表
+# 用法: 资产负债表
 fzb = sina_financial_report("600519", "fzb")
-llb = sina_financial_report("600519", "llb")
 ```
 
 ---

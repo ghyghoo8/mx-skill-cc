@@ -3,9 +3,9 @@ name: a_stock_research
 description: A股研报层 — 东财研报列表+PDF下载、同花顺一致预期EPS、iwencai NL 语义检索
 metadata:
   upstream: simonlin1212/a-stock-data
-  upstream_commit: 2dd95e3c7cc8cd9ec43dbaeaab16bae938b69e0f
-  upstream_version: 3.1
-  upstream_date: 2026-05-19
+  upstream_commit: b428fad2
+  upstream_version: 3.2.1
+  upstream_date: 2026-05-30
   license: Apache-2.0
   author: Simon 林
   layer: Layer 2 研报层
@@ -35,9 +35,7 @@ PDF_TPL = "https://pdf.dfcfw.com/pdf/H3_{info_code}_1.pdf"
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
 
 def eastmoney_reports(code: str, max_pages: int = 5) -> list[dict]:
-    """拉取指定股票的研报列表"""
-    session = requests.Session()
-    session.headers.update({"User-Agent": UA, "Referer": "https://data.eastmoney.com/"})
+    """拉取指定股票的研报列表（em_get 已内置限流，见 a_stock_data_common.md）"""
     all_records = []
     for page in range(1, max_pages + 1):
         params = {
@@ -48,7 +46,8 @@ def eastmoney_reports(code: str, max_pages: int = 5) -> list[dict]:
             "orgCode": "", "code": code, "rcode": "",
             "p": str(page), "pageNum": str(page), "pageNumber": str(page),
         }
-        r = session.get(REPORT_API, params=params, timeout=30)
+        r = em_get(REPORT_API, params=params,
+                   headers={"Referer": "https://data.eastmoney.com/"}, timeout=30)  # 已内置限流
         d = r.json()
         rows = d.get("data") or []
         if not rows:
@@ -56,7 +55,6 @@ def eastmoney_reports(code: str, max_pages: int = 5) -> list[dict]:
         all_records.extend(rows)
         if page >= (d.get("TotalPage", 1) or 1):
             break
-        time.sleep(0.3)
     return all_records
 
 def download_pdf(record: dict, target_dir: str = "./reports") -> str | None:
@@ -72,7 +70,7 @@ def download_pdf(record: dict, target_dir: str = "./reports") -> str | None:
     if target.exists():
         return str(target)
     url = PDF_TPL.format(info_code=info_code)
-    r = requests.get(url, headers={"User-Agent": UA, "Referer": "https://data.eastmoney.com/"}, timeout=60)
+    r = em_get(url, headers={"Referer": "https://data.eastmoney.com/"}, timeout=60)
     if r.status_code == 200 and len(r.content) >= 1024:
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(r.content)
@@ -105,6 +103,7 @@ for r in reports[:5]:
 ```python
 import requests
 import pandas as pd
+from io import StringIO
 
 def ths_eps_forecast(code: str) -> pd.DataFrame:
     """
@@ -120,7 +119,7 @@ def ths_eps_forecast(code: str) -> pd.DataFrame:
     }
     r = requests.get(url, headers=headers, timeout=15)
     r.encoding = "gbk"
-    dfs = pd.read_html(r.text)
+    dfs = pd.read_html(StringIO(r.text))
     # 找含"每股收益"的表格
     for df in dfs:
         cols = [str(c) for c in df.columns]

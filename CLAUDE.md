@@ -35,14 +35,15 @@ Scripts/references deliberately use four different output shapes; the calling Cl
 
 ## a-stock-data complementary layer (vendored, Apache-2.0)
 
-`references/a_stock_*.md` (8 files) are vendored from [simonlin1212/a-stock-data](https://github.com/simonlin1212/a-stock-data) V3.1 (commit `2dd95e3c`, 2026-05-19). They split the upstream single-file SKILL.md by its 7-layer architecture, plus a shared `a_stock_data_common.md`. Treat them as a **complementary/downgrade data layer for A-share only**, not a replacement for mx-skills:
+`references/a_stock_*.md` (8 files) are vendored from [simonlin1212/a-stock-data](https://github.com/simonlin1212/a-stock-data) V3.2.1 (commit `b428fad2`, 2026-05-30). They split the upstream single-file SKILL.md by its 7-layer architecture, plus a shared `a_stock_data_common.md`. Treat them as a **complementary/downgrade data layer for A-share only**, not a replacement for mx-skills:
 
 - **A-share only.** Routing rules in `SKILL.md` force HK/US/funds/macro/AI-report-gen back to mx-skills #1-#14.
 - **Complementary capabilities** (mx-skills has no equivalent): 龙虎榜 / 解禁 / 北向 / 题材归因 / 概念板块 / 融资融券 / 大宗交易 / 股东户数 / 分红送转 / iwencai NL search / realtime order book. Route directly here.
 - **Overlapping capabilities** (basic quotes / news / financials / filings): mx-skills wins by default; degrade to a-stock-data on quota errors (`quota exceeded` / `rate limit` / `调用次数已达上限` / HTTP 429). The 50/day Miaoxiang quota was historically the bottleneck — a-stock-data is the new fallback (better than the BaoStock/yfinance fallback mentioned in `SKILL.md`).
 - **Do not split into discrete `scripts/`.** Upstream's value is the self-contained inline-Python design. Future upstream updates merge via diff onto these 8 files, not by editing 28 Python scripts.
 - **Upstream version is tracked in each file's frontmatter** (`upstream_commit`, `upstream_version`, `upstream_date`). On upstream update, fetch new SKILL.md, diff against pinned commit, re-apply slices.
-- **Common helpers (`UA`, `DATACENTER_URL`, `eastmoney_datacenter()`, ticker normalization, valuation formulas) live in `a_stock_data_common.md`.** Layer files reference these but don't redeclare them — the model must read `_common` before executing any layer snippet.
+- **Common helpers (`UA`, `DATACENTER_URL`, `em_get()`, `eastmoney_datacenter()`, ticker normalization, valuation formulas) live in `a_stock_data_common.md`.** Layer files reference these but don't redeclare them — the model must read `_common` before executing any layer snippet.
+- **东财防封 (v3.2+): every `eastmoney.com` call routes through `em_get()`** — a serial throttle (`EM_MIN_INTERVAL=1.0s` + jitter) over a reused Keep-Alive session, defined once in `_common`. This includes mx-skills' own local-patch eastmoney endpoints (§1.3 K线, §3.3 概念板块, §5.1 个股新闻). When adding any new eastmoney endpoint, use `em_get`, not bare `requests.get`. Non-eastmoney sources (mootdx/腾讯/同花顺/新浪/巨潮/iwencai) keep plain `requests`.
 - **`IWENCAI_API_KEY` is optional** and only used by `a_stock_research.md`'s NL search. The other 27 endpoints are free, no key.
 - **Extra runtime deps**: `mootdx requests stockstats` (coexists with mx-skills' `httpx pandas openpyxl`).
 - **License**: Apache-2.0. Attribution to Simon 林 is preserved in `NOTICE` and each layer file's frontmatter — do not remove.

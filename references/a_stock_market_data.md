@@ -3,9 +3,9 @@ name: a_stock_market_data
 description: A股行情层 — mootdx K线/盘口、腾讯财经 PE/PB/市值、百度股市通 K线带MA
 metadata:
   upstream: simonlin1212/a-stock-data
-  upstream_commit: 2dd95e3c7cc8cd9ec43dbaeaab16bae938b69e0f
-  upstream_version: 3.1
-  upstream_date: 2026-05-19
+  upstream_commit: b428fad2
+  upstream_version: 3.2.1
+  upstream_date: 2026-05-30
   license: Apache-2.0
   author: Simon 林
   layer: Layer 1 行情层
@@ -173,7 +173,7 @@ def eastmoney_kline_with_ma(code: str, period: str = "day", limit: int = 120) ->
                "30min": "30", "60min": "60"}
     secid = (f"1.{code}" if code.startswith(("6", "9"))
              else f"0.{code}")
-    r = requests.get(
+    r = em_get(  # 东财端点，走 em_get 内置限流（见 a_stock_data_common.md）
         "https://push2his.eastmoney.com/api/qt/stock/kline/get",
         params={
             "secid": secid,
@@ -183,8 +183,7 @@ def eastmoney_kline_with_ma(code: str, period: str = "day", limit: int = 120) ->
             "fields2": "f51,f52,f53,f54,f55,f56,f57,f58",
             "lmt": str(limit), "beg": "0", "end": "20500101",
         },
-        headers={"User-Agent": "Mozilla/5.0",
-                 "Referer": "https://quote.eastmoney.com/"},
+        headers={"Referer": "https://quote.eastmoney.com/"},
         timeout=15,
     )
     data = r.json().get("data") or {}

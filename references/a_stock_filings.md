@@ -3,9 +3,9 @@ name: a_stock_filings
 description: A股公告层 — 巨潮公告全文检索、mootdx F10 公告摘要
 metadata:
   upstream: simonlin1212/a-stock-data
-  upstream_commit: 2dd95e3c7cc8cd9ec43dbaeaab16bae938b69e0f
-  upstream_version: 3.1
-  upstream_date: 2026-05-19
+  upstream_commit: b428fad2
+  upstream_version: 3.2.1
+  upstream_date: 2026-05-30
   license: Apache-2.0
   author: Simon 林
   layer: Layer 7 公告层
@@ -24,6 +24,13 @@ metadata:
 
 ```python
 import requests
+from datetime import datetime
+
+def _cninfo_ts_to_date(ts):
+    """巨潮 announcementTime 返回 Unix 毫秒整数，需转换为日期字符串。"""
+    if isinstance(ts, (int, float)):
+        return datetime.fromtimestamp(ts / 1000).strftime("%Y-%m-%d")
+    return str(ts)[:10] if ts else ""
 
 def cninfo_announcements(code: str, page_size: int = 30) -> list[dict]:
     """
@@ -68,7 +75,7 @@ def cninfo_announcements(code: str, page_size: int = 30) -> list[dict]:
         rows.append({
             "title": item.get("announcementTitle", ""),
             "type": item.get("announcementTypeName", ""),
-            "date": item.get("announcementTime", ""),
+            "date": _cninfo_ts_to_date(item.get("announcementTime")),
             "url": f"https://www.cninfo.com.cn/new/disclosure/detail?annoId={item.get('announcementId', '')}",
         })
     return rows

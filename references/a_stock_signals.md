@@ -3,9 +3,9 @@ name: a_stock_signals
 description: A股信号层 — 同花顺热点题材归因、北向资金、概念板块、龙虎榜、全市场龙虎榜、解禁日历、行业板块排名、个股资金流分钟级
 metadata:
   upstream: simonlin1212/a-stock-data
-  upstream_commit: 2dd95e3c7cc8cd9ec43dbaeaab16bae938b69e0f
-  upstream_version: 3.1
-  upstream_date: 2026-05-19
+  upstream_commit: b428fad2
+  upstream_version: 3.2.1
+  upstream_date: 2026-05-30
   license: Apache-2.0
   author: Simon 林
   layer: Layer 3 信号层
@@ -195,13 +195,10 @@ def eastmoney_concept_blocks(code: str) -> list[dict]:
     """
     prefix = ("sh" if code.startswith(("6", "9"))
               else ("bj" if code.startswith("8") else "sz"))
-    r = requests.get(
+    r = em_get(  # 东财端点，走 em_get 内置限流（见 a_stock_data_common.md）
         "https://emweb.securities.eastmoney.com/PC_HSF10/CoreConception/PageAjax",
         params={"code": f"{prefix}{code}"},
-        headers={
-            "User-Agent": "Mozilla/5.0",
-            "Referer": "https://emweb.securities.eastmoney.com/",
-        },
+        headers={"Referer": "https://emweb.securities.eastmoney.com/"},
         timeout=15,
     )
     d = r.json() or {}
@@ -255,7 +252,7 @@ def eastmoney_fund_flow_minute(code: str) -> list[dict]:
         "Origin": "https://quote.eastmoney.com",
     }
     try:
-        r = requests.get(url, params=params, headers=headers, timeout=10)
+        r = em_get(url, params=params, headers=headers, timeout=10)
         d = r.json()
     except Exception as e:
         print(f"[WARN] push2 资金流请求失败: {e}")
@@ -467,7 +464,7 @@ def industry_comparison(top_n: int = 20) -> dict:
         "fields": "f2,f3,f4,f12,f13,f14,f104,f105,f128,f136,f140,f141,f207",
     }
     headers = {"User-Agent": UA}
-    r = requests.get(url, params=params, headers=headers, timeout=15)
+    r = em_get(url, params=params, headers=headers, timeout=15)
     d = r.json()
     items = d.get("data", {}).get("diff", [])
     if not items:

@@ -24,6 +24,7 @@ import traceback
 import urllib.request
 import uuid
 from datetime import datetime, timedelta
+from io import StringIO
 
 try:
     import requests
@@ -155,7 +156,7 @@ def test_ths_eps_forecast() -> None:
                                    "Referer": "https://basic.10jqka.com.cn/"},
                      timeout=TIMEOUT)
     r.encoding = "gbk"
-    dfs = pd.read_html(r.text)
+    dfs = pd.read_html(StringIO(r.text))
     if not dfs:
         raise RuntimeError("no tables parsed")
     has_eps = any(
@@ -416,17 +417,10 @@ def test_eastmoney_stock_news() -> None:
 
 
 def test_cls_telegraph() -> None:
-    r = requests.get(
-        "https://www.cls.cn/nodeapi/telegraphList",
-        params={"rn": "10", "page": "1"},
-        headers={"User-Agent": UA, "Referer": "https://www.cls.cn/"},
-        timeout=TIMEOUT,
-    )
-    r.raise_for_status()
-    rows = (r.json().get("data") or {}).get("roll_data") or []
-    if not rows:
-        raise RuntimeError("zero rows")
-    _record("L5 新闻", "财联社快讯", PASS, f"{len(rows)} items")
+    """已下线（上游 v3.2.1 #14）：cls.cn 迁 Next.js，旧 API 返回 404。
+    保留为 SKIP 以记录弃用；全市场快讯改用 §5.3 东财全球资讯。"""
+    _record("L5 新闻", "财联社快讯", SKIP,
+            "已下线 #14（cls.cn 旧API 404），改用东财全球资讯")
 
 
 def test_eastmoney_global_news() -> None:
@@ -469,7 +463,8 @@ def test_eastmoney_stock_info() -> None:
 
 
 def test_sina_financial_report() -> None:
-    """patched: 响应结构改为 result.data.report_list[date_value].data"""
+    """响应结构 result.data.report_list[date_value].data（mx-skills 2026-05-20 首修，
+    上游 v3.2.1 已官方采纳同向修复，本地 patch 退役）"""
     r = requests.get(
         "https://quotes.sina.cn/cn/api/openapi.php/CompanyFinanceService.getFinanceReport2022",
         params={"paperCode": "sh600519", "source": "lrb",
