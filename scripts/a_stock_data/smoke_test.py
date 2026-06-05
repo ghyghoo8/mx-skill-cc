@@ -239,21 +239,23 @@ def test_northbound_realtime() -> None:
 
 
 def test_eastmoney_concept_blocks() -> None:
-    """patched: 替换百度 PAE 概念板块（被反爬封 IP），改用东财 F10 CoreConception"""
+    """V3.2.2: 概念板块改用东财 slist spt=3（上游官方替换百度 PAE）"""
     r = requests.get(
-        "https://emweb.securities.eastmoney.com/PC_HSF10/CoreConception/PageAjax",
-        params={"code": "sh600519"},
-        headers={"User-Agent": UA,
-                 "Referer": "https://emweb.securities.eastmoney.com/"},
+        "https://push2.eastmoney.com/api/qt/slist/get",
+        params={"fltt": "2", "invt": "2", "secid": "1.600519",
+                "spt": "3", "pi": "0", "pz": "200", "po": "1",
+                "fields": "f12,f14,f3,f128"},
+        headers={"User-Agent": UA, "Referer": "https://quote.eastmoney.com/"},
         timeout=TIMEOUT,
     )
     r.raise_for_status()
-    blocks = r.json().get("ssbk") or []
-    if not blocks:
-        raise RuntimeError("zero blocks")
-    sample = ", ".join(b.get("BOARD_NAME", "") for b in blocks[:4])
-    _record("L3 信号", "东财概念板块 600519 (patched)", PASS,
-            f"{len(blocks)} blocks: {sample}")
+    diff = (r.json().get("data") or {}).get("diff") or {}
+    items = list(diff.values()) if isinstance(diff, dict) else diff
+    if not items:
+        raise RuntimeError("zero boards")
+    sample = ", ".join(it.get("f14", "") for it in items[:4])
+    _record("L3 信号", "东财 slist 概念板块 600519 (v3.2.2)", PASS,
+            f"{len(items)} boards: {sample}")
 
 
 def test_eastmoney_fund_flow_minute() -> None:
@@ -504,9 +506,29 @@ def test_mootdx_finance() -> None:
 
 # ============== Layer 7: 公告层 ==============
 
+def _cninfo_orgid(code: str) -> str:
+    """V3.2.2: 动态查官方 szse_stock.json 映射表，硬编码 fallback。"""
+    r = requests.get("http://www.cninfo.com.cn/new/data/szse_stock.json",
+                     headers={"User-Agent": UA}, timeout=TIMEOUT)
+    m = {s["code"]: s["orgId"] for s in r.json().get("stockList", [])}
+    org = m.get(code)
+    if org:
+        return org
+    if code.startswith("6"):
+        return f"gssh0{code}"
+    elif code.startswith("8") or code.startswith("4"):
+        return f"gsbj0{code}"
+    return f"gssz0{code}"
+
+
 def test_cninfo_announcements() -> None:
+    """V3.2.2: 用 601318（平安）验证动态 orgId 修复——硬编码 gssh0601318 会返回 0 条。"""
+    code = "601318"
+    org_id = _cninfo_orgid(code)
+    if org_id == f"gssh0{code}":
+        raise RuntimeError("orgId 映射表未命中 601318（应为 9900002221）")
     payload = {
-        "stock": "600519,gssh0600519",
+        "stock": f"{code},{org_id}",
         "tabName": "fulltext", "pageSize": "10", "pageNum": "1",
         "column": "", "category": "", "plate": "",
         "seDate": "", "searchkey": "", "secid": "",
@@ -527,8 +549,8 @@ def test_cninfo_announcements() -> None:
     anns = r.json().get("announcements") or []
     if not anns:
         raise RuntimeError("zero announcements")
-    _record("L7 公告", "巨潮公告 600519", PASS,
-            f"{len(anns)} announcements top={anns[0].get('announcementTitle','')[:30]}")
+    _record("L7 公告", "巨潮公告 601318 动态orgId (v3.2.2)", PASS,
+            f"orgId={org_id} {len(anns)} anns top={anns[0].get('announcementTitle','')[:24]}")
 
 
 # ============== Runner ==============
@@ -552,10 +574,14 @@ def main() -> int:
     for fn in ALL_TESTS:
         try:
             fn()
+        except (requests.exceptions.ConnectionError,
+                requests.exceptions.ProxyError,
+                requests.exceptions.Timeout) as e:
+            # 连接级失败（代理拒连 / 超时 / 大陆住宅 IP 间歇风控 #18）非代码 bug → SKIP
+            results.append(("?", fn.__name__, SKIP,
+                            f"连接级失败(非代码bug,#18): {type(e).__name__}"[:80]))
         except Exception as e:
-            layer = "?"
-            endpoint = fn.__name__
-            results.append((layer, endpoint, FAIL,
+            results.append(("?", fn.__name__, FAIL,
                             f"{type(e).__name__}: {e}"[:80]))
 
     print(f"\n{'='*88}")

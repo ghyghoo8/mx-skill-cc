@@ -3,18 +3,15 @@ name: a_stock_signals
 description: A股信号层 — 同花顺热点题材归因、北向资金、概念板块、龙虎榜、全市场龙虎榜、解禁日历、行业板块排名、个股资金流分钟级
 metadata:
   upstream: simonlin1212/a-stock-data
-  upstream_commit: b428fad2
-  upstream_version: 3.2.1
-  upstream_date: 2026-05-30
+  upstream_commit: 9379ab90
+  upstream_version: 3.2.2
+  upstream_date: 2026-06-03
   license: Apache-2.0
   author: Simon 林
   layer: Layer 3 信号层
-  patched: true
-  patch_notes:
-    - "2026-05-20 mx-skills: §3.3 百度概念板块接口被 Baidu PAE 反爬封锁（ResultCode=403），改用东财 emweb F10 CoreConception/PageAjax，返回 ssbk 含全部板块归属"
 ---
 
-> Vendored from [simonlin1212/a-stock-data](https://github.com/simonlin1212/a-stock-data) (Apache-2.0, V3.1 @ 2026-05-19, commit 2dd95e3c).
+> Vendored from [simonlin1212/a-stock-data](https://github.com/simonlin1212/a-stock-data) (Apache-2.0, V3.2.2 @ 2026-06-03, commit 9379ab90).
 > Author: Simon 林 — please retain this attribution per Apache-2.0.
 >
 > **在 mx-skills 中的使用方式**：本文件是 mx-skills 的**补充/降级数据层**。SKILL.md 路由层决定何时读取此文件。共享辅助代码（UA、ticker 归一化、eastmoney_datacenter helper、估值公式）在 `a_stock_data_common.md` — 执行本文件代码前先读那个。
@@ -180,48 +177,59 @@ hist = _load_northbound_history(20)
 print(hist)
 ```
 
-### 3.3 概念板块归属 — mx-skills patched
+### 3.3 东财 slist — 个股所属板块/概念归属（V3.2.2 替换百度）
 
-> **mx-skills patch（2026-05-20）**：上游 V3.1 的 `finance.pae.baidu.com/api/getrelatedblock` 已被 Baidu PAE 反爬封锁（HTTP 200 + `ResultCode="403"` + `Result:[]`）。改用东财 F10 `emweb.securities.eastmoney.com/PC_HSF10/CoreConception/PageAjax`，`ssbk` 字段返回全部板块归属（含行业、概念、地域板块）。
+**核心价值：** 一次调用拿到个股所属的全部板块（行业 + 概念 + 地域混合），含板块代码（BK码）、当日涨跌幅、板块龙头股。题材归因、板块联动分析必备。
+
+> **V3.2.2 替换说明：** 百度 PAE `getrelatedblock` 接口已失效（实测返回 `ResultCode 10003` + 空数组，#18），改用东财 `slist` 个股所属板块接口（`spt=3`，一次请求拿全，零鉴权）。东财把行业/概念/地域混在**一个列表**里返回，板块名本身已自解释（如「食品饮料」是行业、「贵州板块」是地域、「酿酒概念」是概念），AI 直接用板块名做题材归因即可。
 
 ```python
-import requests
+def eastmoney_concept_blocks(code: str) -> dict:
+    """
+    个股所属板块/概念归属（东财 slist，一次请求拿全，已内置限流）。
+    返回: {total, boards: [{name, code(BK码), change_pct, lead_stock}], concept_tags: [板块名...]}
+    boards 混合 行业/概念/地域，板块名自解释；concept_tags 是所有板块名的便捷列表。
+    """
+    market_code = 1 if code.startswith("6") else 0
+    params = {
+        "fltt": "2", "invt": "2",
+        "secid": f"{market_code}.{code}",
+        "spt": "3", "pi": "0", "pz": "200", "po": "1",
+        "fields": "f12,f14,f3,f128",
+    }
+    headers = {"User-Agent": UA, "Referer": "https://quote.eastmoney.com/"}
+    try:
+        r = em_get("https://push2.eastmoney.com/api/qt/slist/get",
+                   params=params, headers=headers, timeout=15)
+        d = r.json()
+    except Exception as e:
+        print(f"[WARN] 东财板块归属请求失败: {e}")
+        return {"total": 0, "boards": [], "concept_tags": []}
 
-def eastmoney_concept_blocks(code: str) -> list[dict]:
-    """
-    东财 F10 板块归属（替换失效的百度 PAE 概念板块接口）。
-    返回扁平列表，每项含: {name, code, rank}
-    由调用方按 BOARD_NAME 关键词或 BOARD_RANK 进一步分类。
-    """
-    prefix = ("sh" if code.startswith(("6", "9"))
-              else ("bj" if code.startswith("8") else "sz"))
-    r = em_get(  # 东财端点，走 em_get 内置限流（见 a_stock_data_common.md）
-        "https://emweb.securities.eastmoney.com/PC_HSF10/CoreConception/PageAjax",
-        params={"code": f"{prefix}{code}"},
-        headers={"Referer": "https://emweb.securities.eastmoney.com/"},
-        timeout=15,
-    )
-    d = r.json() or {}
-    return [
-        {"name": b.get("BOARD_NAME", ""),
-         "code": b.get("BOARD_CODE", ""),
-         "rank": b.get("BOARD_RANK", 0)}
-        for b in (d.get("ssbk") or [])
-    ]
+    diff = (d.get("data") or {}).get("diff") or {}
+    items = diff.values() if isinstance(diff, dict) else diff
+    boards = []
+    for it in items:
+        boards.append({
+            "name": it.get("f14", ""),         # 板块名
+            "code": it.get("f12", ""),         # BK 板块代码
+            "change_pct": it.get("f3", ""),    # 板块当日涨跌幅
+            "lead_stock": it.get("f128", ""),  # 板块龙头股
+        })
+    return {
+        "total": len(boards),
+        "boards": boards,
+        "concept_tags": [b["name"] for b in boards],
+    }
 
 # 用法
 blocks = eastmoney_concept_blocks("600519")
-print(f"共 {len(blocks)} 个板块归属")
-for b in blocks[:10]:
-    print(f"  rank={b['rank']:>2} | code={b['code']:>5} | {b['name']}")
-# 输出示例：
-#   rank= 1 | code=  438 | 食品饮料   ← 一级行业
-#   rank= 2 | code= 1277 | 白酒Ⅱ     ← 二级行业
-#   rank= 3 | code= 1575 | 白酒Ⅲ     ← 三级行业
-#   rank= 4 | code=  173 | 贵州板块   ← 地域板块
+print(f"共 {blocks['total']} 个板块")
+print("板块归属:", blocks["concept_tags"])
+# → ['食品饮料', '白酒Ⅲ', '白酒Ⅱ', '贵州板块', '酿酒概念', 'HS300_', ...]
 ```
 
-> **注**：上游百度版本会把板块分成 industry/concept/region 三类，但东财 `ssbk` 没有显式分类字段。如需分类，可用关键词启发式（"板块" 结尾 → region；含"Ⅰ/Ⅱ/Ⅲ" → 行业子类；其余 → 概念）。建议由调用方决定。
+> **注意：** 东财不区分行业/概念/地域类型（混在一个列表返回）。如需精确分类可按板块名判断，或另查全市场板块清单（`clist` + `m:90+t:1/2/3`）——但后者每次需多发请求、大页易触发风控，不推荐在批量场景用。
 
 ### 3.4 东财 push2 — 个股资金流向（分钟级）
 

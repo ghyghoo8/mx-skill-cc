@@ -3,15 +3,15 @@ name: a_stock_data_common
 description: A股全栈数据工具包 — 共享层（依赖、市场前缀、ticker 归一化、东财 datacenter helper、估值公式、调研流程、数据源优先级、FAQ）。所有 a_stock_* reference 文件执行前必读。
 metadata:
   upstream: simonlin1212/a-stock-data
-  upstream_commit: b428fad2
-  upstream_version: 3.2.1
-  upstream_date: 2026-05-30
+  upstream_commit: 9379ab90
+  upstream_version: 3.2.2
+  upstream_date: 2026-06-03
   license: Apache-2.0
   author: Simon 林
   layer: common
 ---
 
-> Vendored from [simonlin1212/a-stock-data](https://github.com/simonlin1212/a-stock-data) (Apache-2.0, V3.2.1 @ 2026-05-30, commit b428fad2).
+> Vendored from [simonlin1212/a-stock-data](https://github.com/simonlin1212/a-stock-data) (Apache-2.0, V3.2.2 @ 2026-06-03, commit 9379ab90).
 > Author: Simon 林 — please retain this attribution per Apache-2.0. See repo-root `NOTICE`.
 >
 > **在 mx-skills 中的使用方式**：本文件包含所有 7 层共用的辅助函数和常量。Router 路由到任何 `a_stock_*` 层之前，应先读取本文件以获取 `UA`、`DATACENTER_URL`、`eastmoney_datacenter()`、ticker 归一化规则等。
@@ -37,7 +37,7 @@ metadata:
 信号层
 ├── 同花顺热点     → 当日强势股 + 题材归因 reason tags (零鉴权 73ms)
 ├── 同花顺北向     → hgt/sgt 分钟资金流向 + 本地自缓存历史
-├── 百度股市通     → 概念板块归属 (HTTP)
+├── 东财 slist     → 个股所属板块/概念归属 (V3.2.2 替换百度PAE)
 ├── 东财 push2     → 个股资金流向 分钟级 (V3.1 替换百度PAE)
 ├── 龙虎榜席位     → 上榜记录 + 买卖席位 TOP5 + 机构动向 (datacenter-web)
 ├── 全市场龙虎榜   → 每日全市场上榜股票 + 净买额排名 (datacenter-web)
@@ -437,14 +437,14 @@ print(f"PE={q['pe_ttm']} PB={q['pb']} 市值={q['mcap_yi']}亿")
 # 4. PEG校验
 
 # 5. 概念板块归属
-blocks = baidu_concept_blocks(code)
-print(f"概念: {', '.join(blocks['concept_tags'][:10])}")
+blocks = eastmoney_concept_blocks(code)
+print(f"板块: {', '.join(blocks['concept_tags'][:10])}")
 
-# 6. 资金流向（百度分钟级）
-flow = baidu_fund_flow_history(code)
+# 6. 资金流向（分钟级，当日盘中）
+flow = eastmoney_fund_flow_minute(code)
 if flow:
-    recent = flow[0]
-    print(f"最近主力净流入: {recent['mainIn']}万")
+    total = sum(f["main_net"] for f in flow)
+    print(f"当日主力累计净流入: {total/1e4:.0f}万")
 
 # 7. 资金流向（东财120日）
 flow_120 = stock_fund_flow_120d(code)
