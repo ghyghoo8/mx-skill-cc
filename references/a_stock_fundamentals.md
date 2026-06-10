@@ -9,9 +9,9 @@ metadata:
   license: Apache-2.0
   author: Simon 林
   layer: Layer 6 基础数据层
-  patched: true
-  patch_notes:
-    - "2026-05-20 mx-skills: §6.4 新浪三表响应结构在 2026 后改变 — 数据不再放在 result.data.lrb/fzb/llb，改为 result.data.report_list[date_value].data。【已退役】上游 v3.2.1（2026-05-30）官方采纳同向修复，§6.4 现直接采用上游版本（扁平记录列表 + num 参数），不再是本地 patch"
+  patched: false
+  patch_history:
+    - "§6.4 新浪三表 report_list 解析：mx-skills 2026-05-20 首修，上游 v3.2.1 采纳同向修复后本地 patch 退役，现为纯上游码（保留此条仅作历史记录）"
 ---
 
 > Vendored from [simonlin1212/a-stock-data](https://github.com/simonlin1212/a-stock-data) (Apache-2.0, V3.2.2 @ 2026-06-03, commit 9379ab90).

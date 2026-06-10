@@ -117,7 +117,44 @@ def test_market_breadth() -> None:
             f"{len(diff)} 板块 Σ上涨={up} Σ下跌=0")
 
 
-TESTS = [test_zt_pool, test_dt_pool, test_market_breadth]
+def test_concept_blocks_and_members() -> None:
+    """slist 个股→所属板块（v3.2.2），再用 fs=b:BK 取板块→成分股。
+    验证 data_bridge 对 eastmoney_concept_blocks 的「股→板块」语义理解 +
+    theme_miner_board_members 的「板块→成分股」补充端点。"""
+    try:
+        r = _S.get("https://push2.eastmoney.com/api/qt/slist/get",
+                   params={"fltt": "2", "invt": "2", "secid": "1.600519",
+                           "spt": "3", "pi": "0", "pz": "50", "po": "1", "fields": "f12,f14"},
+                   headers=REF, timeout=TIMEOUT)
+        diff = (r.json().get("data") or {}).get("diff") or {}
+    except Exception as e:
+        if _is_network_err(e):
+            _record("slist 股→板块 + 板块→成分股", SKIP, f"network: {repr(e)[:60]}"); return
+        raise
+    items = list(diff.values()) if isinstance(diff, dict) else diff
+    bks = [(x.get("f12"), x.get("f14")) for x in items if str(x.get("f12", "")).startswith("BK")]
+    if not bks:
+        raise RuntimeError(f"slist 未返回 BK 板块码; sample={items[:1]}")
+    # 板块→成分股
+    bk = bks[0][0]
+    try:
+        r2 = _S.get("https://push2.eastmoney.com/api/qt/clist/get",
+                    params={"pn": "1", "pz": "10", "po": "1", "np": "1", "fltt": "2", "invt": "2",
+                            "fid": "f3", "fs": f"b:{bk}", "fields": "f12,f14,f3"},
+                    headers=REF, timeout=TIMEOUT)
+        mem = (r2.json().get("data") or {}).get("diff") or []
+    except Exception as e:
+        if _is_network_err(e):
+            _record("slist 股→板块 + 板块→成分股", SKIP,
+                    f"slist OK ({len(bks)}板块); members network: {repr(e)[:40]}"); return
+        raise
+    if not mem:
+        raise RuntimeError(f"板块 {bk} 成分股为空")
+    _record("slist 股→板块 + 板块→成分股", PASS,
+            f"茅台 {len(bks)} 板块({bks[0][1]}…); {bk} 成分股 {len(mem)} 只")
+
+
+TESTS = [test_zt_pool, test_dt_pool, test_market_breadth, test_concept_blocks_and_members]
 
 
 def main() -> int:

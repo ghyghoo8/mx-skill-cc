@@ -17,8 +17,8 @@ metadata:
 
 | # | 题材挖掘需要 | 来源 | a-stock-data 函数 / 本层补充 |
 |---|---|---|---|
-| 1 | 概念/行业板块行情（涨幅、成交额、换手、涨跌家数、领涨股） | a-stock-data | `a_stock_signals` 行业板块排名（东财 push2 `m:90+t:2`，含 f104/f105 涨跌家数）；概念板块归属 `eastmoney_concept_blocks()` |
-| 2 | 板块成分股（行情、市值、换手、量比） | a-stock-data | `a_stock_signals` 概念板块成分 / 行业排名；个股行情用腾讯 `tencent_quote`（`a_stock_market_data`） |
+| 1 | 概念/行业板块行情（涨幅、成交额、换手、涨跌家数、领涨股） | a-stock-data | `a_stock_signals` 行业板块排名（东财 push2 `m:90+t:2`，含 f104/f105 涨跌家数 + 领涨股 f128）；**个股→所属板块** 用 `eastmoney_concept_blocks(code)`（v3.2.2 slist，返回 `{boards, concept_tags}`，是「股→板块」非「板块→成分股」） |
+| 2 | 板块成分股（行情、市值、换手、量比） | **本层补充** | `theme_miner_board_members(bk_code)` ↓（东财 clist `fs=b:BK####`，板块→成分股；a-stock-data 无此函数）；个股行情/市值再用腾讯 `tencent_quote`（`a_stock_market_data`） |
 | 3 | 个股资金流向（近 N 日主力净流入） | a-stock-data | `a_stock_capital_flow` `stock_fund_flow_120d()` 或 `a_stock_signals` `eastmoney_fund_flow_minute()` |
 | 4 | 个股基本面（PE/PB/ROE/营收增速/净利增速/市值） | a-stock-data | `a_stock_fundamentals` `eastmoney_stock_info()` + 腾讯 `tencent_quote()`（PE/PB/市值）；增速用新浪三表 `sina_financial_report()` |
 | 5 | **涨停股列表**（涨停原因/连板/封单金额） | **本层补充** | `theme_miner_zt_pool()` ↓（东财涨停池，含 `hybk` 行业归属） |
@@ -148,11 +148,64 @@ print(theme_miner_sentiment())
 
 ---
 
+## 补充端点 4：板块成分股（板块 → 成分股）
+
+⚠️ **务必区分**：a-stock-data v3.2.2 的 `eastmoney_concept_blocks(code)` 是「**个股 → 所属板块**」（输入股票代码，返回它属于哪些板块），**不是**「板块 → 成分股」。Step 4 选 Top3 题材的候选股需要后者，a-stock-data 无此函数，故本层补充（东财 clist `fs=b:{BK码}`）。
+
+```python
+# 前置：先执行 a_stock_data_common 的「共用 helper」代码块
+def theme_miner_board_members(bk_code: str, top_n: int = 60) -> list[dict]:
+    """板块成分股（东财 clist fs=b:BK####），按涨幅降序。
+    bk_code 形如 'BK0438'（由 eastmoney_concept_blocks() 的 boards[].code 得到）。
+    返回: [{code, name, pct, turnover_hs, vol_ratio, mcap}]，按 pct 降序。"""
+    r = em_get(
+        "https://push2.eastmoney.com/api/qt/clist/get",
+        params={"pn": "1", "pz": str(top_n), "po": "1", "np": "1", "fltt": "2", "invt": "2",
+                "fid": "f3", "fs": f"b:{bk_code}",
+                "fields": "f12,f14,f3,f8,f10,f20"},
+        headers={"Referer": "https://quote.eastmoney.com/"}, timeout=15,
+    )
+    diff = (r.json().get("data") or {}).get("diff") or []
+    return [{
+        "code": x.get("f12", ""), "name": x.get("f14", ""),
+        "pct": x.get("f3"),            # 涨跌幅 %
+        "turnover_hs": x.get("f8"),    # 换手率 %
+        "vol_ratio": x.get("f10"),     # 量比
+        "mcap": x.get("f20"),          # 总市值（元）
+    } for x in diff]
+
+# 用法：取「食品饮料」板块涨幅前 15 只
+members = theme_miner_board_members("BK0438", top_n=15)
+print(f"{len(members)} 只成分股 top={members[0]['name'] if members else '-'}")
+```
+
+> 实测：slist 已确认可返回个股 BK 码（如茅台 → BK0438 食品饮料 / BK0173 贵州板块）；`fs=b:BK####` 为东财成分股标准端点，与 a-stock-data `industry_comparison` 同主机同协议。
+
+---
+
 ## 涨停股 → 题材匹配（替代上游脆弱做法）
 
-上游用「涨停原因文本是否含板块名关键词」匹配，易漏。本层用涨停池的 `industry`(hybk) 字段 + 概念板块成分股双路匹配：
+上游用「涨停原因文本是否含板块名关键词」匹配，易漏。本层改用「**逐只涨停股归票到板块再计数**」（基于 v3.2.2 的「股→板块」语义，方向正确）：
 
-1. **行业归属直配**：`theme_miner_zt_pool()` 每只涨停股的 `industry` 直接给出其东财行业板块名——与 Step 2 的行业板块名精确匹配，统计每个行业板块的涨停家数。
-2. **概念成分股补充**：对概念板块（非行业），用 a-stock-data `eastmoney_concept_blocks()` 取成分股代码集合，与涨停池代码集合取交集，得该概念的涨停家数。
+1. **行业归属直配（快）**：`theme_miner_zt_pool()` 每只涨停股的 `industry`(hybk) 字段直接给出其东财行业板块名——与 Step 2 的行业板块名精确匹配，按行业累计涨停家数。
+2. **板块归属精算（全）**：对每只涨停股 `c`，调用 `eastmoney_concept_blocks(c)` 得其 `concept_tags`（所属行业+概念+地域板块名列表），把该股计入这些板块——遍历完涨停池后，每个板块名累计到的涨停股数即「涨停家数」。这覆盖概念/地域板块（非仅行业），是题材三维评分「驱动强度/可持续性」的涨停家数输入（见 [[theme_miner_theme_scoring]]）。
+
+```python
+# 涨停家数按板块归票（方向：每只涨停股 → 它所属的板块们）
+from collections import Counter
+zt = theme_miner_zt_pool()
+board_zt = Counter()
+for s in zt:
+    if s["industry"]:
+        board_zt[s["industry"]] += 1          # 1) 行业直配（省一次请求）
+    blocks = eastmoney_concept_blocks(s["code"])   # 2) 概念/地域精算（每股一次 em_get，已限流）
+    for name in blocks["concept_tags"]:
+        board_zt[name] += 1
+# board_zt[板块名] = 该板块当日涨停家数；去重提示：行业名可能与 concept_tags 重复计数，
+# 若 industry 已含于 concept_tags，二选一即可（精度优先用 2）。
+print(board_zt.most_common(10))
+```
+
+> 注：批量对每只涨停股调 `eastmoney_concept_blocks` 会发 N 次东财请求（N=涨停数，经 `em_get` 限流约 N 秒）。涨停股很多时，可只对「行业直配」无法归类或需要概念/地域归因的股票调用，控制请求量。
 
 两路结果即题材三维评分「驱动强度/可持续性」维度所需的「涨停家数」输入（见 [[theme_miner_theme_scoring]]）。

@@ -51,7 +51,8 @@ Step 3: 题材评分与 Top3 筛选
    │
 Step 4: 成分股数据采集
    │
-   ├── Top3 题材成分股 ← a-stock-data a_stock_signals 概念板块成分/行业排名
+   ├── Top3 题材成分股 ← data_bridge theme_miner_board_members(BK码)（板块→成分股）
+   │     （BK 码由 eastmoney_concept_blocks 的 boards[].code 得到；注意该函数是「股→板块」）
    ├── 对每个题材取涨幅前 10-15 只候选股
    ├── 候选股资金流向 ← a-stock-data a_stock_capital_flow / a_stock_signals
    ├── 候选股基本面 ← a-stock-data a_stock_fundamentals / 腾讯 tencent_quote

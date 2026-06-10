@@ -43,7 +43,20 @@ Scripts/references deliberately use four different output shapes; the calling Cl
 - **Do not split into discrete `scripts/`.** Upstream's value is the self-contained inline-Python design. Future upstream updates merge via diff onto these 8 files, not by editing 28 Python scripts.
 - **Upstream version is tracked in each file's frontmatter** (`upstream_commit`, `upstream_version`, `upstream_date`). On upstream update, fetch new SKILL.md, diff against pinned commit, re-apply slices.
 - **Common helpers (`UA`, `DATACENTER_URL`, `em_get()`, `eastmoney_datacenter()`, ticker normalization, valuation formulas) live in `a_stock_data_common.md`.** Layer files reference these but don't redeclare them — the model must read `_common` before executing any layer snippet.
-- **东财防封 (v3.2+): every `eastmoney.com` call routes through `em_get()`** — a serial throttle (`EM_MIN_INTERVAL=1.0s` + jitter) over a reused Keep-Alive session, defined once in `_common`. This includes mx-skills' own local-patch eastmoney endpoints (§1.3 K线, §3.3 概念板块, §5.1 个股新闻). When adding any new eastmoney endpoint, use `em_get`, not bare `requests.get`. Non-eastmoney sources (mootdx/腾讯/同花顺/新浪/巨潮/iwencai) keep plain `requests`.
+- **东财防封 (v3.2+): every `eastmoney.com` call routes through `em_get()`** — a serial throttle (`EM_MIN_INTERVAL=1.0s` + jitter) over a reused Keep-Alive session, defined once in `_common`. This includes mx-skills' own local-patch eastmoney endpoints (§1.3 K线, §5.1 个股新闻). When adding any new eastmoney endpoint, use `em_get`, not bare `requests.get`. Non-eastmoney sources (mootdx/腾讯/同花顺/新浪/巨潮/iwencai) keep plain `requests`.
+
+### Local-patch ledger vs upstream (current: V3.2.2 `9379ab90`)
+
+The vendored layer diverges from upstream only where 2026 endpoint drift broke things. **2 patches active, 2 retired.** A new session should treat this as the source of truth for "what is NOT pristine upstream":
+
+| § | File | Status | What |
+|---|---|---|---|
+| §1.3 | `a_stock_market_data.md` | **ACTIVE** | 百度 K线带 MA 被 PAE 反爬封 → 东财 `push2his` K线 + 本地 pandas rolling MA。`patched: true` |
+| §5.1 | `a_stock_news.md` | **ACTIVE** | 东财 search-api jsonp 对纯股票代码只返 `passportWeb`（实测 0 新闻）→ `np-listapi getListInfo`。上游 v3.2.1 走了不同修法但本环境仍失效，故保留。`patched: true` |
+| §6.4 | `a_stock_fundamentals.md` | RETIRED | 新浪三表 report_list 解析；上游 v3.2.1 采纳同向修复 → 现为纯上游码 |
+| §3.3 | `a_stock_signals.md` | RETIRED | 概念板块；我们曾用 emweb F10，上游 v3.2.2 改用 `slist`(spt=3) → 现为纯上游码 |
+
+On upstream re-sync: only §1.3 / §5.1 need re-applying after the diff; §3.3 / §6.4 are upstream now.
 - **`IWENCAI_API_KEY` is optional** and only used by `a_stock_research.md`'s NL search. The other 27 endpoints are free, no key.
 - **Extra runtime deps**: `mootdx requests stockstats` (coexists with mx-skills' `httpx pandas openpyxl`).
 - **License**: Apache-2.0. Attribution to Simon 林 is preserved in `NOTICE` and each layer file's frontmatter — do not remove.
@@ -53,11 +66,12 @@ Scripts/references deliberately use four different output shapes; the calling Cl
 `references/theme_miner*.md` (6 files) are vendored from `skills-xjx/hot-theme-miner` v2.0.0 (commit `e7a022b3`, 2026-04-15). This is **not a data source** — it's an opinionated **analysis/scoring layer** (A-share theme→stock→target-price→strategy pipeline, sub-skill #22) that consumes a-stock-data for its data.
 
 - **One-directional dependency.** theme_miner references a-stock-data functions; a-stock-data never references theme_miner (so a-stock-data keeps upgrading via upstream diff independently). Do **not** add miner-specific code into any `a_stock_*.md`.
-- **`theme_miner_data_bridge.md` is the seam** — it maps the miner's 6 data needs to a-stock-data functions, and carries the only original code in this layer: supplemental 涨停池/跌停池 endpoints (`push2ex.eastmoney.com`, a-stock-data lacks these) + market breadth derived by summing per-industry `f104/f105` from a-stock-data's `m:90+t:2` industry-board call. These supplemental endpoints **also go through `em_get()`** (read `a_stock_data_common.md` first).
+- **`theme_miner_data_bridge.md` is the seam** — it maps the miner's 6 data needs to a-stock-data functions, and carries the only original code in this layer (all via `em_get()`; read `a_stock_data_common.md` first): supplemental 涨停池/跌停池 (`push2ex.eastmoney.com`), market breadth (sum per-industry `f104/f105` from `m:90+t:2`), and **`theme_miner_board_members(BK码)`** (东财 `fs=b:BK####`, board→members — a-stock-data lacks this).
+- **Semantics gotcha**: a-stock-data's `eastmoney_concept_blocks(code)` (v3.2.2 slist) is **股→板块** (input a stock code, returns the boards it belongs to as a dict `{boards, concept_tags}`), **not** 板块→成分股. The bridge's 涨停→题材 matching tallies per-stock blocks; board→members needs `theme_miner_board_members`. (This bit me once — the dict-returning slist replaced the old list-returning emweb patch in v3.2.2.)
 - **Routing vs mx-skills #12 热点发现**: simple "今天什么板块热" → #12 (paid, fast). Full pipeline (Top3 themes + Top5 stocks + target price + strategy) or #12 quota-exhausted → #22 theme_miner (free, transparent scoring).
 - **Quality caveats baked into the docs**: the price-prediction model is heuristic/un-backtested (it fabricates a "PE historical percentile" from current PE alone). `theme_miner_price_prediction.md` carries a mandatory disclaimer; treat target prices as relative ranking signal only, not price forecasts.
 - **License unknown**: the upstream package shipped no LICENSE and author is "AI Assistant". Vendored on explicit user instruction without license verification — flagged honestly in each file's frontmatter. Unlike a-stock-data (clean Apache-2.0), this carries unresolved provenance risk.
-- **Regression test**: `scripts/theme_miner/smoke_test.py` covers only the supplemental endpoints (涨停池/跌停池/breadth); scoring is pure prose with no code. `push2` breadth SKIPs under a flaky proxy.
+- **Regression test**: `scripts/theme_miner/smoke_test.py` covers only the supplemental endpoints (涨停池/跌停池/breadth/slist+members); scoring is pure prose with no code. Endpoints on `push2.eastmoney.com` may SKIP on transient network errors (the test treats those as SKIP, not FAIL, by design).
 
 ## Two scripts are multi-step (not single-shot)
 
