@@ -3,15 +3,15 @@ name: a_stock_capital_flow
 description: A股资金面/筹码层 — 融资融券、大宗交易、股东户数变化、分红送转历史、个股资金流120日
 metadata:
   upstream: simonlin1212/a-stock-data
-  upstream_commit: b428fad2
-  upstream_version: 3.2.1
-  upstream_date: 2026-05-30
+  upstream_commit: 9379ab90
+  upstream_version: 3.2.2
+  upstream_date: 2026-06-03
   license: Apache-2.0
   author: Simon 林
   layer: Layer 4 资金面/筹码层
 ---
 
-> Vendored from [simonlin1212/a-stock-data](https://github.com/simonlin1212/a-stock-data) (Apache-2.0, V3.1 @ 2026-05-19, commit 2dd95e3c).
+> Vendored from [simonlin1212/a-stock-data](https://github.com/simonlin1212/a-stock-data) (Apache-2.0, V3.2.2 @ 2026-06-03, commit 9379ab90).
 > Author: Simon 林 — please retain this attribution per Apache-2.0.
 >
 > **在 mx-skills 中的使用方式**：本文件是 mx-skills 的**补充/降级数据层**。SKILL.md 路由层决定何时读取此文件。共享辅助代码（UA、ticker 归一化、eastmoney_datacenter helper、估值公式）在 `a_stock_data_common.md` — 执行本文件代码前先读那个。
@@ -210,5 +210,7 @@ recent_20 = data[-20:]
 total_main = sum(d["main_net"] for d in recent_20)
 print(f"\n近20日主力累计净流入: {total_main/1e8:.2f}亿")
 ```
+
+> **⚠️ 大陆住宅 IP 间歇封锁（#18）：** push2/push2his 系列对**部分大陆住宅宽带 IP** 有连接级风控，表现为偶发 `HTTP 000`（连接被拒/超时）或返回空——**这不是代码问题**（同一代码在其他网络/时段实测正常）。遇到时：① 隔几分钟重试；② 换网络环境（如手机热点）；③ 降低请求频率（调大 `EM_MIN_INTERVAL`）。日级资金流务实替代：仍可用 mootdx 算量价，或换时段重试。
 
 ---

@@ -35,7 +35,7 @@ Scripts/references deliberately use four different output shapes; the calling Cl
 
 ## a-stock-data complementary layer (vendored, Apache-2.0)
 
-`references/a_stock_*.md` (8 files) are vendored from [simonlin1212/a-stock-data](https://github.com/simonlin1212/a-stock-data) V3.2.1 (commit `b428fad2`, 2026-05-30). They split the upstream single-file SKILL.md by its 7-layer architecture, plus a shared `a_stock_data_common.md`. Treat them as a **complementary/downgrade data layer for A-share only**, not a replacement for mx-skills:
+`references/a_stock_*.md` (8 files) are vendored from [simonlin1212/a-stock-data](https://github.com/simonlin1212/a-stock-data) V3.2.2 (commit `9379ab90`, 2026-06-03). They split the upstream single-file SKILL.md by its 7-layer architecture, plus a shared `a_stock_data_common.md`. Treat them as a **complementary/downgrade data layer for A-share only**, not a replacement for mx-skills:
 
 - **A-share only.** Routing rules in `SKILL.md` force HK/US/funds/macro/AI-report-gen back to mx-skills #1-#14.
 - **Complementary capabilities** (mx-skills has no equivalent): 龙虎榜 / 解禁 / 北向 / 题材归因 / 概念板块 / 融资融券 / 大宗交易 / 股东户数 / 分红送转 / iwencai NL search / realtime order book. Route directly here.
