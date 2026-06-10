@@ -124,6 +124,25 @@ Vendor 自 [simonlin1212/a-stock-data](https://github.com/simonlin1212/a-stock-d
 
 调用模式 D：模型读 reference → 直接 `python3 -c "<内嵌代码>"` 执行 → 返回 Python 值（不写文件）。详见 `SKILL.md` 路由规则。
 
+### 分析层 — theme-miner 题材挖掘（仅 A 股，#22，建立在 a-stock-data 之上）
+
+Vendor 自 `skills-xjx/hot-theme-miner` v2.0.0（commit `e7a022b3`，2026-04-15）。**不是数据源，而是打分大脑**：在 a-stock-data 数据之上跑「题材 Top3 → 个股 Top5 → 中长期目标价 → 操作策略」一条龙。
+
+| Reference | 作用 |
+|---|---|
+| `references/theme_miner.md` | 入口：触发、与 #12 边界、流程概览 |
+| `references/theme_miner_data_bridge.md` | 数据桥：6 类数据需求 → a-stock-data 函数；自带涨停池/跌停池/市场情绪补充端点 |
+| `references/theme_miner_theme_scoring.md` | 题材三维评分 + 生命周期 + 题材级别 |
+| `references/theme_miner_stock_scoring.md` | 个股五维评分 + 风险标注 |
+| `references/theme_miner_price_prediction.md` | 中长期目标价（⚠️ 启发式、非回测）+ 操作策略 |
+| `references/theme_miner_execution.md` | 7 步流水线 + 情绪评级 + 报告模板 |
+
+- **单向依赖**：本层引用 a-stock-data，a-stock-data 不感知本层（后者继续按上游 diff 独立升级）。
+- **路由切边**：简单「今天什么板块热」走 mx-skills #12（付费、快）；整条链路或 #12 配额耗尽走本层（免费、打分透明）。
+- **⚠️ 价格模型为启发式、未回测**（用当前 PE 反推伪"历史分位"），目标价仅作相对排序参考，已在文档内强制免责。
+- **许可证未知**：上游无 LICENSE、作者署名 "AI Assistant"，按指示在未核实许可证情况下 vendor，各文件 frontmatter 已如实标注（与 a-stock-data 的 Apache-2.0 不同，存在来源风险）。
+- 补充端点回归测试：`scripts/theme_miner/smoke_test.py`。
+
 ## 使用限额
 
 ### 各技能配额/限制汇总

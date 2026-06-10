@@ -132,6 +132,7 @@ pip3 install httpx pandas openpyxl --user
 | 19 | A 股**个股新闻、财联社快讯、东财全球资讯**（mx 资讯搜索配额耗尽时降级） | A股新闻层 | `references/a_stock_news.md` | 内嵌 Python（D） |
 | 20 | A 股**财务 37 字段、F10 九大类、新浪三表**（mx 金融数据查询配额耗尽时降级） | A股基础数据层 | `references/a_stock_fundamentals.md` | 内嵌 Python（D） |
 | 21 | A 股**巨潮公告全文检索**（mx 资讯搜索配额耗尽时降级） | A股公告层 | `references/a_stock_filings.md` | 内嵌 Python（D） |
+| 22 | A 股**完整题材挖掘流水线**：题材 Top3 + 个股 Top5 + 目标价 + 操作策略（建立在 a-stock-data 之上的分析层；#12 热点发现配额耗尽时降级到这里） | 题材挖掘分析层 | `references/theme_miner.md` | 内嵌 Python（D，经 data_bridge 调 a-stock-data） |
 
 **路由冲突时的优先级规则**：
 - 若用户请求包含明确的报告类型关键词（如"业绩点评""行业报告""深度研究"），优先按报告类型匹配。
@@ -154,6 +155,12 @@ A 股 + 重叠能力（基础行情 / 个股新闻 / 个股财务 / 公告检索
 
 非 A 股（港股/美股/基金/宏观/可转债/ETF/全市场选股/AI 报告生成）
   → 强制 mx-skills，**禁用** a-stock-data 降级（a-stock-data 仅覆盖 A 股）
+
+A 股题材挖掘（#12 热点发现 vs #22 题材挖掘分析层）
+  → 简单「今天什么板块/方向热」总览 → 默认 mx-skills #12（付费 API，快）
+  → 完整链路「题材 Top3 + 个股 Top5 + 目标价 + 操作策略」 → #22 题材挖掘分析层（免费，a-stock-data 供数，打分透明）
+  → #12 配额耗尽（限流字样）→ 降级到 #22
+  → #22 是分析层，单向依赖 a-stock-data（#15-#21）；其价格预测为启发式模型（非回测），仅作相对排序参考
 ```
 
 ---
@@ -450,3 +457,12 @@ python3 -u {baseDir}/scripts/.../get_data.py ...
 - `references/a_stock_news.md` — Layer 5 新闻层（东财个股新闻 + 财联社快讯 + 全球资讯）
 - `references/a_stock_fundamentals.md` — Layer 6 基础数据层（mootdx 财务 37 字段/F10 + 东财个股基本面 + 新浪三表）
 - `references/a_stock_filings.md` — Layer 7 公告层（巨潮公告全文检索）
+
+### 题材挖掘分析层（仅 A 股，#22，建立在 a-stock-data 之上）
+
+- `references/theme_miner.md` — **入口**：触发条件、与 #12 的边界、流程概览、子文档索引
+- `references/theme_miner_data_bridge.md` — 数据桥：6 类数据需求 → a-stock-data 函数映射 + 涨停池/跌停池/市场情绪补充端点（单向依赖，不改 a-stock-data）
+- `references/theme_miner_theme_scoring.md` — 题材三维评分（驱动力×资金强度×可持续性）+ 生命周期 + 题材级别
+- `references/theme_miner_stock_scoring.md` — 个股五维评分（题材核心度×技术×资金×基本面×催化剂）+ 风险标注
+- `references/theme_miner_price_prediction.md` — 中长期目标价（⚠️ 启发式、非回测）+ 置信度 + 操作策略
+- `references/theme_miner_execution.md` — 7 步流水线 + 情绪评级 + 报告模板 + 数据约束

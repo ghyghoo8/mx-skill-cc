@@ -48,6 +48,17 @@ Scripts/references deliberately use four different output shapes; the calling Cl
 - **Extra runtime deps**: `mootdx requests stockstats` (coexists with mx-skills' `httpx pandas openpyxl`).
 - **License**: Apache-2.0. Attribution to Simon 林 is preserved in `NOTICE` and each layer file's frontmatter — do not remove.
 
+## theme-miner analysis layer (vendored, sits *on top of* a-stock-data)
+
+`references/theme_miner*.md` (6 files) are vendored from `skills-xjx/hot-theme-miner` v2.0.0 (commit `e7a022b3`, 2026-04-15). This is **not a data source** — it's an opinionated **analysis/scoring layer** (A-share theme→stock→target-price→strategy pipeline, sub-skill #22) that consumes a-stock-data for its data.
+
+- **One-directional dependency.** theme_miner references a-stock-data functions; a-stock-data never references theme_miner (so a-stock-data keeps upgrading via upstream diff independently). Do **not** add miner-specific code into any `a_stock_*.md`.
+- **`theme_miner_data_bridge.md` is the seam** — it maps the miner's 6 data needs to a-stock-data functions, and carries the only original code in this layer: supplemental 涨停池/跌停池 endpoints (`push2ex.eastmoney.com`, a-stock-data lacks these) + market breadth derived by summing per-industry `f104/f105` from a-stock-data's `m:90+t:2` industry-board call. These supplemental endpoints **also go through `em_get()`** (read `a_stock_data_common.md` first).
+- **Routing vs mx-skills #12 热点发现**: simple "今天什么板块热" → #12 (paid, fast). Full pipeline (Top3 themes + Top5 stocks + target price + strategy) or #12 quota-exhausted → #22 theme_miner (free, transparent scoring).
+- **Quality caveats baked into the docs**: the price-prediction model is heuristic/un-backtested (it fabricates a "PE historical percentile" from current PE alone). `theme_miner_price_prediction.md` carries a mandatory disclaimer; treat target prices as relative ranking signal only, not price forecasts.
+- **License unknown**: the upstream package shipped no LICENSE and author is "AI Assistant". Vendored on explicit user instruction without license verification — flagged honestly in each file's frontmatter. Unlike a-stock-data (clean Apache-2.0), this carries unresolved provenance risk.
+- **Regression test**: `scripts/theme_miner/smoke_test.py` covers only the supplemental endpoints (涨停池/跌停池/breadth); scoring is pure prose with no code. `push2` breadth SKIPs under a flaky proxy.
+
 ## Two scripts are multi-step (not single-shot)
 
 Most sub-skills are one `get_data.py --query "..."` call. Two are not:
