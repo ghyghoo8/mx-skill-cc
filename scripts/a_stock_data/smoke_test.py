@@ -107,6 +107,25 @@ def test_eastmoney_kline_ma() -> None:
             f"{data.get('name')} {len(klines)} bars MA5={last['ma5']:.2f} MA20={last['ma20']:.2f}")
 
 
+def _tdx_client(market="std"):
+    """镜像 a_stock_data_common.md 的 tdx_client()：显式探测 TCP 服务器绕过
+    mootdx 0.11.x BESTIP 空串 bug（v3.2.4）。失败回退 bestip / 裸 factory。"""
+    import socket
+    from mootdx.quotes import Quotes
+    servers = [('119.97.185.59', 7709), ('124.70.133.119', 7709),
+               ('116.205.183.150', 7709), ('123.60.73.44', 7709)]
+    for ip, port in servers:
+        try:
+            with socket.create_connection((ip, port), timeout=2.0):
+                return Quotes.factory(market=market, server=(ip, port))
+        except Exception:
+            continue
+    try:
+        return Quotes.factory(market=market, bestip=True)
+    except Exception:
+        return Quotes.factory(market=market)
+
+
 def test_mootdx_quote() -> None:
     try:
         from mootdx.quotes import Quotes  # noqa: F401
@@ -115,7 +134,7 @@ def test_mootdx_quote() -> None:
                 "mootdx not installed (pip install mootdx)")
         return
     try:
-        client = Quotes.factory(market="std")
+        client = _tdx_client()  # v3.2.4: 规避 BESTIP 空串 bug
         klines = client.bars(symbol="600519", category=4, offset=5)
         n = len(klines) if klines is not None else 0
         if n == 0:
@@ -488,13 +507,13 @@ def test_sina_financial_report() -> None:
 
 def test_mootdx_finance() -> None:
     try:
-        from mootdx.quotes import Quotes
+        from mootdx.quotes import Quotes  # noqa: F401
     except ImportError:
         _record("L6 基础数据", "mootdx 财务37字段", SKIP,
                 "mootdx not installed")
         return
     try:
-        client = Quotes.factory(market="std")
+        client = _tdx_client()  # v3.2.4: 规避 BESTIP 空串 bug
         fin = client.finance(symbol="600519")
         if fin is None:
             raise RuntimeError("None returned")

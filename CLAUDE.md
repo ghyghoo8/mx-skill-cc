@@ -35,7 +35,7 @@ Scripts/references deliberately use four different output shapes; the calling Cl
 
 ## a-stock-data complementary layer (vendored, Apache-2.0)
 
-`references/a_stock_*.md` (8 files) are vendored from [simonlin1212/a-stock-data](https://github.com/simonlin1212/a-stock-data) V3.2.2 (commit `9379ab90`, 2026-06-03). They split the upstream single-file SKILL.md by its 7-layer architecture, plus a shared `a_stock_data_common.md`. Treat them as a **complementary/downgrade data layer for A-share only**, not a replacement for mx-skills:
+`references/a_stock_*.md` (8 files) are vendored from [simonlin1212/a-stock-data](https://github.com/simonlin1212/a-stock-data) V3.2.4 (commit `e40d0655`, 2026-06-20). They split the upstream single-file SKILL.md by its 7-layer architecture, plus a shared `a_stock_data_common.md`. Treat them as a **complementary/downgrade data layer for A-share only**, not a replacement for mx-skills:
 
 - **A-share only.** Routing rules in `SKILL.md` force HK/US/funds/macro/AI-report-gen back to mx-skills #1-#14.
 - **Complementary capabilities** (mx-skills has no equivalent): 龙虎榜 / 解禁 / 北向 / 题材归因 / 概念板块 / 融资融券 / 大宗交易 / 股东户数 / 分红送转 / iwencai NL search / realtime order book. Route directly here.
@@ -45,7 +45,7 @@ Scripts/references deliberately use four different output shapes; the calling Cl
 - **Common helpers (`UA`, `DATACENTER_URL`, `em_get()`, `eastmoney_datacenter()`, ticker normalization, valuation formulas) live in `a_stock_data_common.md`.** Layer files reference these but don't redeclare them — the model must read `_common` before executing any layer snippet.
 - **东财防封 (v3.2+): every `eastmoney.com` call routes through `em_get()`** — a serial throttle (`EM_MIN_INTERVAL=1.0s` + jitter) over a reused Keep-Alive session, defined once in `_common`. This includes mx-skills' own local-patch eastmoney endpoints (§1.3 K线, §5.1 个股新闻). When adding any new eastmoney endpoint, use `em_get`, not bare `requests.get`. Non-eastmoney sources (mootdx/腾讯/同花顺/新浪/巨潮/iwencai) keep plain `requests`.
 
-### Local-patch ledger vs upstream (current: V3.2.2 `9379ab90`)
+### Local-patch ledger vs upstream (current: V3.2.4 `e40d0655`)
 
 The vendored layer diverges from upstream only where 2026 endpoint drift broke things. **2 patches active, 2 retired.** A new session should treat this as the source of truth for "what is NOT pristine upstream":
 

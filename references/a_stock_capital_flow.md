@@ -3,15 +3,15 @@ name: a_stock_capital_flow
 description: A股资金面/筹码层 — 融资融券、大宗交易、股东户数变化、分红送转历史、个股资金流120日
 metadata:
   upstream: simonlin1212/a-stock-data
-  upstream_commit: 9379ab90
-  upstream_version: 3.2.2
-  upstream_date: 2026-06-03
+  upstream_commit: e40d0655
+  upstream_version: 3.2.4
+  upstream_date: 2026-06-20
   license: Apache-2.0
   author: Simon 林
   layer: Layer 4 资金面/筹码层
 ---
 
-> Vendored from [simonlin1212/a-stock-data](https://github.com/simonlin1212/a-stock-data) (Apache-2.0, V3.2.2 @ 2026-06-03, commit 9379ab90).
+> Vendored from [simonlin1212/a-stock-data](https://github.com/simonlin1212/a-stock-data) (Apache-2.0, V3.2.4 @ 2026-06-20, commit e40d0655).
 > Author: Simon 林 — please retain this attribution per Apache-2.0.
 >
 > **在 mx-skills 中的使用方式**：本文件是 mx-skills 的**补充/降级数据层**。SKILL.md 路由层决定何时读取此文件。共享辅助代码（UA、ticker 归一化、eastmoney_datacenter helper、估值公式）在 `a_stock_data_common.md` — 执行本文件代码前先读那个。

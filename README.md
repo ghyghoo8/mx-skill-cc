@@ -110,7 +110,7 @@ cp .env.example .env
 
 ### 补充能力层 — a-stock-data（仅 A 股，免费免 Key）
 
-Vendor 自 [simonlin1212/a-stock-data](https://github.com/simonlin1212/a-stock-data)（Apache-2.0，V3.2.2）。覆盖 mx-skills 没有的实时盘口、筹码、资金面能力；也作为 mx-skills 配额耗尽时的降级源。
+Vendor 自 [simonlin1212/a-stock-data](https://github.com/simonlin1212/a-stock-data)（Apache-2.0，V3.2.4）。覆盖 mx-skills 没有的实时盘口、筹码、资金面能力；也作为 mx-skills 配额耗尽时的降级源。
 
 | 层 | Reference | 互补能力 |
 |---|---|---|
@@ -223,13 +223,15 @@ mx-skills/
 本仓库的 **a-stock-data 补充能力层** vendor 自：
 
 - 项目主页：**[simonlin1212/a-stock-data](https://github.com/simonlin1212/a-stock-data)**
-- 版本：V3.2.2（2026-06-03，commit `9379ab90`；历经 V3.1 `2dd95e3c` → V3.2.1 `b428fad2` → V3.2.2 跟进）
+- 版本：V3.2.4（2026-06-20，commit `e40d0655`；历经 V3.1 `2dd95e3c` → V3.2.1 `b428fad2` → V3.2.2 `9379ab90` → V3.2.3/3.2.4 跟进）
 - 作者：**Simon 林**（抖音「Simon林」 / 公众号「硅基世纪」）
 - License：Apache License 2.0
 
-上游单文件 `SKILL.md`（78KB，覆盖 7 层架构 / 27 个端点 / 13 个数据源）按层拆分为 8 个 reference 文件（`references/a_stock_*.md`），保留原作者署名与许可声明。本地针对 2026 年后部分接口漂移做了 **2 处仍生效的 patch**（§1.3 百度 K线被封改东财 push2his + pandas 算 MA、§5.1 东财个股新闻 search-api 失效改 np-listapi；详见各文件 frontmatter 的 `patch_notes`）。另有 2 处历史 patch 已被上游官方采纳后本地退役（§6.4 新浪三表 → v3.2.1；§3.3 概念板块 → v3.2.2 改东财 slist）。所有改动经 `scripts/a_stock_data/smoke_test.py` 回归验证。完整 Apache-2.0 声明见仓库根目录 `NOTICE`。
+上游单文件 `SKILL.md`（覆盖 7 层架构 / 28 个端点 / 13 个数据源）按层拆分为 8 个 reference 文件（`references/a_stock_*.md`），保留原作者署名与许可声明。本地针对 2026 年后部分接口漂移做了 **2 处仍生效的 patch**（§1.3 百度 K线被封改东财 push2his + pandas 算 MA、§5.1 东财个股新闻 search-api 失效改 np-listapi；详见各文件 frontmatter 的 `patch_notes`）。另有 2 处历史 patch 已被上游官方采纳后本地退役（§6.4 新浪三表 → v3.2.1；§3.3 概念板块 → v3.2.2 改东财 slist）。所有改动经 `scripts/a_stock_data/smoke_test.py` 回归验证。完整 Apache-2.0 声明见仓库根目录 `NOTICE`。
 
 > **v3.2.2 升级要点（2026-06-03 跟进）**：①§3.3 概念板块——百度 PAE `getrelatedblock` 失效（`ResultCode 10003`），上游改用东财 `slist`（`spt=3`，一次拿全板块 + BK码 + 涨跌 + 龙头股），本地退役自有的 emweb F10 patch 与之对齐；②§7.1 巨潮公告——硬编码 `gssh0{code}` 致大量 601xxx 股票查不到公告，改用 `_cninfo_orgid()` 动态查官方 `szse_stock.json` 映射表（6199 股）+ 硬编码 fallback。
+>
+> **v3.2.3 / v3.2.4 升级要点（2026-06-20 跟进，纯新增 + 兼容补丁，不涉本地 patch）**：①§2.1 研报层新增**东财行业研报** `eastmoney_industry_reports()`（与个股研报同端点，`qType=1`，端点数 27→28）；②新增 `tdx_client()` helper 规避 mootdx 0.11.x 全新安装的 `BESTIP.HQ` 空串崩溃（显式探测 TCP 服务器 + 三级 fallback），4 处 mootdx 调用统一改走它。
 >
 > **v3.2 升级要点（2026-05-30 跟进）**：上游新增「东财防封」架构——所有 `eastmoney.com` 请求统一走 `em_get()` 节流入口（串行限流 + 会话复用），本地 patch 的 eastmoney 端点也已接入；财联社快讯（§5.2）因 cls.cn 迁站下线，全市场快讯改用东财全球资讯（§5.3）。
 
