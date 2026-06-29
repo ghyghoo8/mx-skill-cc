@@ -30,7 +30,7 @@ metadata:
 ```
 Step 1: 市场情绪采集
    │
-   ├── 涨停数/跌停数 ← data_bridge 涨停池/跌停池补充端点
+   ├── 涨停数/跌停数 ← a-stock-data Layer 8 em_zt_pool/em_dt_pool（经 data_bridge）
    ├── 上涨/下跌家数 ← data_bridge 由 a-stock-data 行业板块 f104/f105 汇总
    ├── 计算市场情绪评级
    └── 输出: 上涨家数、下跌家数、涨停数、情绪评级

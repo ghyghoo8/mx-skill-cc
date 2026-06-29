@@ -35,7 +35,7 @@ Scripts/references deliberately use four different output shapes; the calling Cl
 
 ## a-stock-data complementary layer (vendored, Apache-2.0)
 
-`references/a_stock_*.md` (8 files) are vendored from [simonlin1212/a-stock-data](https://github.com/simonlin1212/a-stock-data) V3.2.4 (commit `e40d0655`, 2026-06-20). They split the upstream single-file SKILL.md by its 7-layer architecture, plus a shared `a_stock_data_common.md`. Treat them as a **complementary/downgrade data layer for A-share only**, not a replacement for mx-skills:
+`references/a_stock_*.md` (11 files) are vendored from [simonlin1212/a-stock-data](https://github.com/simonlin1212/a-stock-data) V3.3.0 (commit `bcda4054`, 2026-06-28). They split the upstream single-file SKILL.md by its **10-layer architecture** (Layer 1-7 + V3.3.0's Layer 8 打板 / Layer 9 ETF期权 / Layer 10 舆情互动), plus a shared `a_stock_data_common.md`. Treat them as a **complementary/downgrade data layer for A-share only**, not a replacement for mx-skills:
 
 - **A-share only.** Routing rules in `SKILL.md` force HK/US/funds/macro/AI-report-gen back to mx-skills #1-#14.
 - **Complementary capabilities** (mx-skills has no equivalent): 龙虎榜 / 解禁 / 北向 / 题材归因 / 概念板块 / 融资融券 / 大宗交易 / 股东户数 / 分红送转 / iwencai NL search / realtime order book. Route directly here.
@@ -45,7 +45,7 @@ Scripts/references deliberately use four different output shapes; the calling Cl
 - **Common helpers (`UA`, `DATACENTER_URL`, `em_get()`, `eastmoney_datacenter()`, ticker normalization, valuation formulas) live in `a_stock_data_common.md`.** Layer files reference these but don't redeclare them — the model must read `_common` before executing any layer snippet.
 - **东财防封 (v3.2+): every `eastmoney.com` call routes through `em_get()`** — a serial throttle (`EM_MIN_INTERVAL=1.0s` + jitter) over a reused Keep-Alive session, defined once in `_common`. This includes mx-skills' own local-patch eastmoney endpoints (§1.3 K线, §5.1 个股新闻). When adding any new eastmoney endpoint, use `em_get`, not bare `requests.get`. Non-eastmoney sources (mootdx/腾讯/同花顺/新浪/巨潮/iwencai) keep plain `requests`.
 
-### Local-patch ledger vs upstream (current: V3.2.4 `e40d0655`)
+### Local-patch ledger vs upstream (current: V3.3.0 `bcda4054`)
 
 The vendored layer diverges from upstream only where 2026 endpoint drift broke things. **2 patches active, 2 retired.** A new session should treat this as the source of truth for "what is NOT pristine upstream":
 
@@ -57,7 +57,7 @@ The vendored layer diverges from upstream only where 2026 endpoint drift broke t
 | §3.3 | `a_stock_signals.md` | RETIRED | 概念板块；我们曾用 emweb F10，上游 v3.2.2 改用 `slist`(spt=3) → 现为纯上游码 |
 
 On upstream re-sync: only §1.3 / §5.1 need re-applying after the diff; §3.3 / §6.4 are upstream now.
-- **`IWENCAI_API_KEY` is optional** and only used by `a_stock_research.md`'s NL search. The other 27 endpoints are free, no key.
+- **`IWENCAI_API_KEY` is optional** and only used by `a_stock_research.md`'s NL search. The other ~39 endpoints (40 total) are free, no key.
 - **Extra runtime deps**: `mootdx requests stockstats` (coexists with mx-skills' `httpx pandas openpyxl`).
 - **License**: Apache-2.0. Attribution to Simon 林 is preserved in `NOTICE` and each layer file's frontmatter — do not remove.
 
@@ -66,7 +66,7 @@ On upstream re-sync: only §1.3 / §5.1 need re-applying after the diff; §3.3 /
 `references/theme_miner*.md` (6 files) are vendored from `skills-xjx/hot-theme-miner` v2.0.0 (commit `e7a022b3`, 2026-04-15). This is **not a data source** — it's an opinionated **analysis/scoring layer** (A-share theme→stock→target-price→strategy pipeline, sub-skill #22) that consumes a-stock-data for its data.
 
 - **One-directional dependency.** theme_miner references a-stock-data functions; a-stock-data never references theme_miner (so a-stock-data keeps upgrading via upstream diff independently). Do **not** add miner-specific code into any `a_stock_*.md`.
-- **`theme_miner_data_bridge.md` is the seam** — it maps the miner's 6 data needs to a-stock-data functions, and carries the only original code in this layer (all via `em_get()`; read `a_stock_data_common.md` first): supplemental 涨停池/跌停池 (`push2ex.eastmoney.com`), market breadth (sum per-industry `f104/f105` from `m:90+t:2`), and **`theme_miner_board_members(BK码)`** (东财 `fs=b:BK####`, board→members — a-stock-data lacks this).
+- **`theme_miner_data_bridge.md` is the seam** — it maps the miner's 6 data needs to a-stock-data functions. 涨停/跌停池 now reuse a-stock-data's official **Layer 8** (`em_zt_pool`/`em_dt_pool`, added v3.3.0 — the bridge's old self-built `theme_miner_zt_pool`/`dt_pool` were removed in the v3.3.0 sync). The bridge's only remaining original code (all via `em_get()`): market breadth (sum per-industry `f104/f105` from `m:90+t:2`) and **`theme_miner_board_members(BK码)`** (东财 `fs=b:BK####`, board→members — a-stock-data still lacks this).
 - **Semantics gotcha**: a-stock-data's `eastmoney_concept_blocks(code)` (v3.2.2 slist) is **股→板块** (input a stock code, returns the boards it belongs to as a dict `{boards, concept_tags}`), **not** 板块→成分股. The bridge's 涨停→题材 matching tallies per-stock blocks; board→members needs `theme_miner_board_members`. (This bit me once — the dict-returning slist replaced the old list-returning emweb patch in v3.2.2.)
 - **Routing vs mx-skills #12 热点发现**: simple "今天什么板块热" → #12 (paid, fast). Full pipeline (Top3 themes + Top5 stocks + target price + strategy) or #12 quota-exhausted → #22 theme_miner (free, transparent scoring).
 - **Quality caveats baked into the docs**: the price-prediction model is heuristic/un-backtested (it fabricates a "PE historical percentile" from current PE alone). `theme_miner_price_prediction.md` carries a mandatory disclaimer; treat target prices as relative ranking signal only, not price forecasts.

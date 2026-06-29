@@ -3,15 +3,15 @@ name: a_stock_research
 description: A股研报层 — 东财研报列表+PDF下载、同花顺一致预期EPS、iwencai NL 语义检索
 metadata:
   upstream: simonlin1212/a-stock-data
-  upstream_commit: e40d0655
-  upstream_version: 3.2.4
-  upstream_date: 2026-06-20
+  upstream_commit: bcda4054
+  upstream_version: 3.3.0
+  upstream_date: 2026-06-28
   license: Apache-2.0
   author: Simon 林
   layer: Layer 2 研报层
 ---
 
-> Vendored from [simonlin1212/a-stock-data](https://github.com/simonlin1212/a-stock-data) (Apache-2.0, V3.2.4 @ 2026-06-20, commit e40d0655).
+> Vendored from [simonlin1212/a-stock-data](https://github.com/simonlin1212/a-stock-data) (Apache-2.0, V3.3.0 @ 2026-06-28, commit bcda4054).
 > Author: Simon 林 — please retain this attribution per Apache-2.0.
 >
 > **在 mx-skills 中的使用方式**：本文件是 mx-skills 的**补充/降级数据层**。SKILL.md 路由层决定何时读取此文件。共享辅助代码（UA、ticker 归一化、eastmoney_datacenter helper、估值公式）在 `a_stock_data_common.md` — 执行本文件代码前先读那个。
@@ -63,7 +63,7 @@ def download_pdf(record: dict, target_dir: str = "./reports") -> str | None:
     if not info_code:
         return None
     date = (record.get("publishDate") or "")[:10]
-    org = record.get("orgSName") or "未知"
+    org = re.sub(r'[\\/:*?"<>|]', "_", record.get("orgSName") or "未知")[:40]
     title = re.sub(r'[\\/:*?"<>|]', "_", record.get("title", ""))[:80]
     fname = f"{date}_{org}_{title}.pdf"
     target = Path(target_dir) / fname

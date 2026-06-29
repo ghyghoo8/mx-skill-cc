@@ -3,15 +3,15 @@ name: a_stock_data_common
 description: A股全栈数据工具包 — 共享层（依赖、市场前缀、ticker 归一化、东财 datacenter helper、估值公式、调研流程、数据源优先级、FAQ）。所有 a_stock_* reference 文件执行前必读。
 metadata:
   upstream: simonlin1212/a-stock-data
-  upstream_commit: e40d0655
-  upstream_version: 3.2.4
-  upstream_date: 2026-06-20
+  upstream_commit: bcda4054
+  upstream_version: 3.3.0
+  upstream_date: 2026-06-28
   license: Apache-2.0
   author: Simon 林
   layer: common
 ---
 
-> Vendored from [simonlin1212/a-stock-data](https://github.com/simonlin1212/a-stock-data) (Apache-2.0, V3.2.4 @ 2026-06-20, commit e40d0655).
+> Vendored from [simonlin1212/a-stock-data](https://github.com/simonlin1212/a-stock-data) (Apache-2.0, V3.3.0 @ 2026-06-28, commit bcda4054).
 > Author: Simon 林 — please retain this attribution per Apache-2.0. See repo-root `NOTICE`.
 >
 > **在 mx-skills 中的使用方式**：本文件包含所有 7 层共用的辅助函数和常量。Router 路由到任何 `a_stock_*` 层之前，应先读取本文件以获取 `UA`、`DATACENTER_URL`、`eastmoney_datacenter()`、ticker 归一化规则等。
@@ -20,9 +20,8 @@ metadata:
 
 ---
 
-## 七层架构总览
+## 十层架构总览
 
-```
 ```
 行情层（实时，不封IP）
 ├── mootdx        → K线 + 五档盘口 + 逐笔成交 (TCP 7709)
@@ -65,6 +64,21 @@ metadata:
 公告层
 ├── 巨潮 cninfo    → 公告全文检索+下载 (cninfo.com.cn)
 └── mootdx F10     → 最新公告摘要
+
+打板层（V3.3.0 新增）
+├── 东财四池       → 涨停/炸板/跌停/昨日涨停 (push2ex，连板/封单/炸板/晋级率)
+├── 同花顺涨停揭秘 → 涨停原因题材 + 封板成功率 + 板型
+└── 打板情绪速算   → 炸板率 / 连板高度 / 连板梯队
+
+ETF 期权层（V3.3.0 新增）
+├── 新浪合约清单   → 50/300/科创50/500ETF 合约
+├── 新浪 T型报价   → 买卖五档 + 持仓量 + 行权价
+└── 新浪希腊字母   → Delta/Gamma/Theta/Vega + IV + 理论价
+
+舆情互动层（V3.3.0 新增）
+├── 巨潮互动易     → 投资者提问 + 公司回复 (AI问答独家信源)
+├── 同花顺热榜     → 人气值 + 概念标签 + 排名变化
+└── 东财人气榜     → 个股人气排名 + 概念命中
 ```
 
 ---
@@ -136,8 +150,12 @@ metadata:
 - 用户要看**指数/ETF行情**（上证指数 / 沪深300 / 创业板指 / ETF）
 - 用户要看新闻资讯（个股新闻 / 财联社快讯 / 全球资讯）
 - 用户要查公告（巨潮公告全文）
+- 用户要看**涨停 / 打板情绪**（涨停池 / 连板梯队 / 炸板率 / 跌停 / 涨停原因题材）
+- 用户要看**ETF 期权**（T型报价 / 希腊字母 Delta·Gamma·Theta·Vega / 隐含波动率 IV）
+- 用户要看**投资者互动问答**（公司如何回应某传闻/利好 · 互动易）
+- 用户要看**市场热度 / 人气榜**（同花顺热榜 / 东财人气榜 / 个股概念命中）
 - 用户要做产业链调研 / 批量横向对比
-- 关键词：估值、一致预期、机构预测、市盈率、PEG、市值、研报、产业链、行业研究、K线、盘口、公告、新闻、**强势股、题材、热点、概念归因、北向资金、沪股通、深股通、概念板块、资金流向、主力、龙虎榜、席位、营业部、全市场龙虎榜、净买入、解禁、限售、行业对比、行业轮动、融资融券、两融、大宗交易、股东户数、筹码集中、分红、派息、送股、指数、ETF**
+- 关键词：估值、一致预期、机构预测、市盈率、PEG、市值、研报、产业链、行业研究、K线、盘口、公告、新闻、**强势股、题材、热点、概念归因、北向资金、沪股通、深股通、概念板块、资金流向、主力、龙虎榜、席位、营业部、全市场龙虎榜、净买入、解禁、限售、行业对比、行业轮动、融资融券、两融、大宗交易、股东户数、筹码集中、分红、派息、送股、指数、ETF、涨停、打板、连板、炸板、跌停、涨停原因、封板、晋级率、ETF期权、希腊字母、隐含波动率、互动易、投资者关系、热榜、人气榜、市场热度**
 
 ---
 
@@ -270,6 +288,18 @@ DATACENTER_URL = "https://datacenter-web.eastmoney.com/api/data/v1/get"
 # Keep-Alive 会话，批量调用时自动降速，避免被封。详见「数据源优先级 & 东财防封」章节。
 EM_SESSION = requests.Session()
 EM_SESSION.headers.update({"User-Agent": UA})
+# 连接级自动重试：瞬态连接错误 / 429 / 5xx 指数退避重试（住宅IP偶发风控更稳）。
+# 注意：403 不重试（东财风控信号，重试无益反而加重；按下方 EM_MIN_INTERVAL 降频应对）。
+try:
+    from requests.adapters import HTTPAdapter
+    from urllib3.util.retry import Retry
+    _em_adapter = HTTPAdapter(max_retries=Retry(
+        total=3, connect=3, backoff_factor=0.6,
+        status_forcelist=[429, 500, 502, 503, 504], allowed_methods=["GET"]))
+    EM_SESSION.mount("https://", _em_adapter)
+    EM_SESSION.mount("http://", _em_adapter)
+except Exception:
+    pass  # 老版本 urllib3 缺 allowed_methods 等参数时降级为无重试，不影响主流程
 EM_MIN_INTERVAL = 1.0          # 两次东财请求最小间隔(秒)；批量筛选建议调大到 1.5~2
 _em_last_call = [0.0]          # 模块级上次请求时间戳
 
@@ -300,6 +330,7 @@ def eastmoney_datacenter(report_name: str, columns: str = "ALL",
     if d.get("result") and d["result"].get("data"):
         return d["result"]["data"]
     return []
+```
 
 ---
 
@@ -394,16 +425,22 @@ def full_valuation(code: str) -> dict:
     eps_cur = eps_next = None
     analyst_count = 0
     if not df.empty and len(df.columns) >= 3:
-        # 解析表格（列结构因页面可能变化，取前两行数据行）
+        # 按列名取「均值」=机构一致预期EPS（见 ths_eps_forecast 文档）。
+        # 不按 iloc 位置取——同花顺表格列序会变；且旧版误用 iloc[2]＝「最小值」
+        # 当成一致预期，导致 pe_forward/PEG 系统性偏差，此处一并修正。
+        def _pick(row, name):
+            for c in df.columns:
+                if name in str(c):
+                    return row.get(c)
+            return None
         try:
-            for i, row in df.iterrows():
-                if i == 0:
-                    eps_cur = float(row.iloc[2]) if pd.notna(row.iloc[2]) else None
-                    analyst_count = int(row.iloc[1]) if pd.notna(row.iloc[1]) else 0
-                elif i == 1:
-                    eps_next = float(row.iloc[2]) if pd.notna(row.iloc[2]) else None
-        except (ValueError, IndexError):
-            pass
+            r0 = df.iloc[0]
+            v = _pick(r0, "均值");          eps_cur = float(v) if pd.notna(v) else None
+            cnt = _pick(r0, "预测机构数");  analyst_count = int(cnt) if pd.notna(cnt) else 0
+            if len(df) >= 2:
+                vn = _pick(df.iloc[1], "均值"); eps_next = float(vn) if pd.notna(vn) else None
+        except (ValueError, TypeError) as e:
+            print(f"[WARN] full_valuation EPS 解析失败({e})，估值可能不完整")
 
     # 3. 估值指标
     pe_fwd = price / eps_cur if eps_cur else float("inf")

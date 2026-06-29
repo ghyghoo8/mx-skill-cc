@@ -3,9 +3,9 @@ name: a_stock_market_data
 description: A股行情层 — mootdx K线/盘口、腾讯财经 PE/PB/市值、百度股市通 K线带MA
 metadata:
   upstream: simonlin1212/a-stock-data
-  upstream_commit: e40d0655
-  upstream_version: 3.2.4
-  upstream_date: 2026-06-20
+  upstream_commit: bcda4054
+  upstream_version: 3.3.0
+  upstream_date: 2026-06-28
   license: Apache-2.0
   author: Simon 林
   layer: Layer 1 行情层
@@ -14,7 +14,7 @@ metadata:
     - "2026-05-20 mx-skills: §1.3 百度 K线带 MA 接口已被 Baidu PAE 反爬封锁（ResultCode=403），改用东财 push2his K线 + 本地 pandas rolling 计算 MA5/10/20"
 ---
 
-> Vendored from [simonlin1212/a-stock-data](https://github.com/simonlin1212/a-stock-data) (Apache-2.0, V3.2.4 @ 2026-06-20, commit e40d0655).
+> Vendored from [simonlin1212/a-stock-data](https://github.com/simonlin1212/a-stock-data) (Apache-2.0, V3.3.0 @ 2026-06-28, commit bcda4054).
 > Author: Simon 林 — please retain this attribution per Apache-2.0.
 >
 > **在 mx-skills 中的使用方式**：本文件是 mx-skills 的**补充/降级数据层**。SKILL.md 路由层决定何时读取此文件。共享辅助代码（UA、ticker 归一化、eastmoney_datacenter helper、估值公式）在 `a_stock_data_common.md` — 执行本文件代码前先读那个。
@@ -34,9 +34,17 @@ client = tdx_client()  # 见 Prerequisites 的 tdx_client() helper（规避 0.11
 
 # === K线数据 ===
 # market: 0=深圳, 1=上海
-# category: 4=日线, 5=周线, 6=月线, 7=1分钟, 8=5分钟, 9=15分钟, 10=30分钟, 11=60分钟
-klines = client.bars(symbol='688017', category=4, offset=10)
+# ⚠️ 参数名是 frequency（不是 category！传 category 会被 **kwargs 静默吞掉，
+#    永远退化成默认 frequency=9 日线，拿不到分钟数据）。
+# mootdx 0.11.7 实测频率值表：
+#   0=5分钟  1=15分钟  2=30分钟  3=60分钟(1小时)  4=日线  5=周线  6=月线
+#   8=1分钟  9=日线(默认)  10=季线  11=年线        （7=1分钟除权口径,少用）
+klines = client.bars(symbol='688017', frequency=9, offset=10)    # 日线
+min1   = client.bars(symbol='688017', frequency=8, offset=240)   # 1分钟（一个交易日≈240根）
+min5   = client.bars(symbol='688017', frequency=0, offset=48)    # 5分钟
 # 返回: open, close, high, low, vol, amount, datetime
+# ⚠️ 复权：bars 返回【不复权】原始价（通达信原始数据，无 adjust 参数）。
+#    跨除权除息日做估值/回测前需自行复权，或改用带前复权的日K数据源（腾讯财经）。
 
 # === 实时报价 ===
 quotes = client.quotes(symbol=['688017', '300476'])

@@ -110,7 +110,7 @@ cp .env.example .env
 
 ### 补充能力层 — a-stock-data（仅 A 股，免费免 Key）
 
-Vendor 自 [simonlin1212/a-stock-data](https://github.com/simonlin1212/a-stock-data)（Apache-2.0，V3.2.4）。覆盖 mx-skills 没有的实时盘口、筹码、资金面能力；也作为 mx-skills 配额耗尽时的降级源。
+Vendor 自 [simonlin1212/a-stock-data](https://github.com/simonlin1212/a-stock-data)（Apache-2.0，V3.3.0）。覆盖 mx-skills 没有的实时盘口、筹码、资金面、打板、ETF期权、舆情互动能力；也作为 mx-skills 配额耗尽时的降级源。
 
 | 层 | Reference | 互补能力 |
 |---|---|---|
@@ -121,6 +121,9 @@ Vendor 自 [simonlin1212/a-stock-data](https://github.com/simonlin1212/a-stock-d
 | Layer 5 新闻 | `references/a_stock_news.md` | 东财个股新闻、财联社快讯、全球资讯 |
 | Layer 6 基础数据 | `references/a_stock_fundamentals.md` | mootdx 财务 37 字段/F10、新浪三表 |
 | Layer 7 公告 | `references/a_stock_filings.md` | 巨潮公告全文检索 |
+| Layer 8 打板 | `references/a_stock_limit_up.md` | **涨停/炸板/跌停/昨日涨停四池、同花顺涨停揭秘、打板情绪（炸板率/连板梯队）** |
+| Layer 9 ETF期权 | `references/a_stock_etf_options.md` | **50/300/科创50/500ETF 合约清单、T型报价、希腊字母+IV** |
+| Layer 10 舆情互动 | `references/a_stock_sentiment.md` | **巨潮互动易问答、同花顺热榜、东财人气榜、个股概念命中** |
 
 调用模式 D：模型读 reference → 直接 `python3 -c "<内嵌代码>"` 执行 → 返回 Python 值（不写文件）。详见 `SKILL.md` 路由规则。
 
@@ -223,15 +226,19 @@ mx-skills/
 本仓库的 **a-stock-data 补充能力层** vendor 自：
 
 - 项目主页：**[simonlin1212/a-stock-data](https://github.com/simonlin1212/a-stock-data)**
-- 版本：V3.2.4（2026-06-20，commit `e40d0655`；历经 V3.1 `2dd95e3c` → V3.2.1 `b428fad2` → V3.2.2 `9379ab90` → V3.2.3/3.2.4 跟进）
+- 版本：V3.3.0（2026-06-28，commit `bcda4054`；历经 V3.1 `2dd95e3c` → V3.2.1 `b428fad2` → V3.2.2 `9379ab90` → V3.2.4 `e40d0655` → V3.2.5/3.3.0 跟进）
 - 作者：**Simon 林**（抖音「Simon林」 / 公众号「硅基世纪」）
 - License：Apache License 2.0
 
-上游单文件 `SKILL.md`（覆盖 7 层架构 / 28 个端点 / 13 个数据源）按层拆分为 8 个 reference 文件（`references/a_stock_*.md`），保留原作者署名与许可声明。本地针对 2026 年后部分接口漂移做了 **2 处仍生效的 patch**（§1.3 百度 K线被封改东财 push2his + pandas 算 MA、§5.1 东财个股新闻 search-api 失效改 np-listapi；详见各文件 frontmatter 的 `patch_notes`）。另有 2 处历史 patch 已被上游官方采纳后本地退役（§6.4 新浪三表 → v3.2.1；§3.3 概念板块 → v3.2.2 改东财 slist）。所有改动经 `scripts/a_stock_data/smoke_test.py` 回归验证。完整 Apache-2.0 声明见仓库根目录 `NOTICE`。
+上游单文件 `SKILL.md`（覆盖 **10 层架构 / 40 个端点** / 13 个数据源）按层拆分为 **11 个 reference 文件**（`references/a_stock_*.md`），保留原作者署名与许可声明。本地针对 2026 年后部分接口漂移做了 **2 处仍生效的 patch**（§1.3 百度 K线被封改东财 push2his + pandas 算 MA、§5.1 东财个股新闻 search-api 失效改 np-listapi；详见各文件 frontmatter 的 `patch_notes`）。另有 2 处历史 patch 已被上游官方采纳后本地退役（§6.4 新浪三表 → v3.2.1；§3.3 概念板块 → v3.2.2 改东财 slist）。所有改动经 `scripts/a_stock_data/smoke_test.py` 回归验证。完整 Apache-2.0 声明见仓库根目录 `NOTICE`。
 
 > **v3.2.2 升级要点（2026-06-03 跟进）**：①§3.3 概念板块——百度 PAE `getrelatedblock` 失效（`ResultCode 10003`），上游改用东财 `slist`（`spt=3`，一次拿全板块 + BK码 + 涨跌 + 龙头股），本地退役自有的 emweb F10 patch 与之对齐；②§7.1 巨潮公告——硬编码 `gssh0{code}` 致大量 601xxx 股票查不到公告，改用 `_cninfo_orgid()` 动态查官方 `szse_stock.json` 映射表（6199 股）+ 硬编码 fallback。
 >
-> **v3.2.3 / v3.2.4 升级要点（2026-06-20 跟进，纯新增 + 兼容补丁，不涉本地 patch）**：①§2.1 研报层新增**东财行业研报** `eastmoney_industry_reports()`（与个股研报同端点，`qType=1`，端点数 27→28）；②新增 `tdx_client()` helper 规避 mootdx 0.11.x 全新安装的 `BESTIP.HQ` 空串崩溃（显式探测 TCP 服务器 + 三级 fallback），4 处 mootdx 调用统一改走它。
+> **v3.2.3 / v3.2.4 升级要点（2026-06-20 跟进，纯新增 + 兼容补丁，不涉本地 patch）**：①§2.1 研报层新增**东财行业研报** `eastmoney_industry_reports()`（与个股研报同端点，`qType=1`）；②新增 `tdx_client()` helper 规避 mootdx 0.11.x 全新安装的 `BESTIP.HQ` 空串崩溃（显式探测 TCP 服务器 + 三级 fallback），4 处 mootdx 调用统一改走它。
+>
+> **v3.2.5 升级要点（2026-06-28 跟进，bug 修复）**：①**§1.1 mootdx K线参数 `category`→`frequency`（CRITICAL）**——旧参数名被 `**kwargs` 静默吞，分钟/周/月线全退化成日线且不报错；同步修了本仓库 smoke_test 里的同一处；②`full_valuation` EPS 取列由 `iloc[2]`(=最小值) 改按列名「均值」取（否则 PE/PEG 系统性偏低）；③`em_get` 加 `HTTPAdapter+Retry`（429/5xx 退避）；④`download_pdf` 机构名路径加固。
+>
+> **v3.3.0 升级要点（2026-06-28 跟进，新增三层，7→10 层 / 28→40 端点）**：新增 **Layer 8 打板**（东财涨停/炸板/跌停/昨日涨停四池 + 同花顺涨停揭秘 + 打板情绪）、**Layer 9 ETF期权**（新浪 T型报价 + 希腊字母/IV，交易所预算好无需本地 BSM）、**Layer 10 舆情互动**（巨潮互动易问答 + 同花顺热榜 + 东财人气榜）。拆为 3 个新 reference 文件；theme_miner 题材挖掘层的自建涨停/跌停池补充端点已改为复用本层官方 `em_zt_pool`/`em_dt_pool`。
 >
 > **v3.2 升级要点（2026-05-30 跟进）**：上游新增「东财防封」架构——所有 `eastmoney.com` 请求统一走 `em_get()` 节流入口（串行限流 + 会话复用），本地 patch 的 eastmoney 端点也已接入；财联社快讯（§5.2）因 cls.cn 迁站下线，全市场快讯改用东财全球资讯（§5.3）。
 

@@ -135,7 +135,7 @@ def test_mootdx_quote() -> None:
         return
     try:
         client = _tdx_client()  # v3.2.4: 规避 BESTIP 空串 bug
-        klines = client.bars(symbol="600519", category=4, offset=5)
+        klines = client.bars(symbol="600519", frequency=9, offset=5)  # v3.2.5: frequency 非 category
         n = len(klines) if klines is not None else 0
         if n == 0:
             raise RuntimeError("zero rows")
@@ -572,6 +572,53 @@ def test_cninfo_announcements() -> None:
             f"orgId={org_id} {len(anns)} anns top={anns[0].get('announcementTitle','')[:24]}")
 
 
+# ============== Layer 8/9/10: V3.3.0 新增层 ==============
+
+def test_em_zt_pool() -> None:
+    """L8 打板：东财涨停池（push2ex）。取最近工作日，非交易日 data=null → SKIP。"""
+    d = datetime.now()
+    while d.weekday() >= 5:
+        d -= timedelta(days=1)
+    date = d.strftime("%Y%m%d")
+    r = requests.get("https://push2ex.eastmoney.com/getTopicZTPool",
+        params={"ut": "7eea3edcaed734bea9cbfc24409ed989", "dpt": "wz.ztzt",
+                "Pageindex": "0", "pagesize": "20", "sort": "fbt:asc", "date": date},
+        headers={"User-Agent": UA, "Referer": "https://quote.eastmoney.com/"}, timeout=TIMEOUT)
+    pool = (r.json().get("data") or {}).get("pool") or []
+    if not pool:
+        _record("L8 打板", "东财涨停池", SKIP, f"date={date} 0 涨停（非交易日/盘前）"); return
+    s = pool[0]
+    if not all(k in s for k in ("c", "n", "lbc", "zbc")):
+        raise RuntimeError(f"涨停池字段缺失 keys={list(s.keys())}")
+    _record("L8 打板", "东财涨停池 (v3.3.0)", PASS,
+            f"{len(pool)} 涨停 top={s.get('n')} {s.get('lbc')}板 炸板{s.get('zbc')}次")
+
+
+def test_sina_option_codes() -> None:
+    """L9 ETF期权：新浪 50ETF 合约月份清单。"""
+    r = requests.get("https://stock.finance.sina.com.cn/futures/api/openapi.php/"
+                     "StockOptionService.getStockName?exchange=null&cate=50ETF",
+                     headers={"User-Agent": UA, "Referer": "https://stock.finance.sina.com.cn/"},
+                     timeout=TIMEOUT)
+    months = (((r.json().get("result") or {}).get("data") or {}).get("contractMonth")) or []
+    if len(months) < 2:
+        raise RuntimeError(f"期权合约月份为空: {months}")
+    _record("L9 ETF期权", "新浪50ETF合约清单 (v3.3.0)", PASS,
+            f"{len(months)-1} 个月份 近月={months[1] if len(months)>1 else '?'}")
+
+
+def test_ths_hot_list() -> None:
+    """L10 舆情：同花顺热榜（人气+概念标签）。"""
+    r = requests.get("https://dq.10jqka.com.cn/fuyao/hot_list_data/out/hot_list/v1/stock",
+        params={"stock_type": "a", "type": "hour", "list_type": "normal"},
+        headers={"User-Agent": UA}, timeout=TIMEOUT)
+    lst = (r.json().get("data") or {}).get("stock_list") or []
+    if not lst:
+        raise RuntimeError("同花顺热榜为空")
+    _record("L10 舆情", "同花顺热榜 (v3.3.0)", PASS,
+            f"{len(lst)} 只 top={lst[0].get('name')} 人气={lst[0].get('rate')}")
+
+
 # ============== Runner ==============
 
 ALL_TESTS = [
@@ -585,6 +632,7 @@ ALL_TESTS = [
     test_eastmoney_stock_news, test_cls_telegraph, test_eastmoney_global_news,
     test_eastmoney_stock_info, test_sina_financial_report, test_mootdx_finance,
     test_cninfo_announcements,
+    test_em_zt_pool, test_sina_option_codes, test_ths_hot_list,
 ]
 
 

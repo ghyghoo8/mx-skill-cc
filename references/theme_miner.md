@@ -62,7 +62,7 @@ Step 7 报告组装         → 完整 Markdown 报告
 
 | 文档 | 说明 |
 |------|------|
-| [[theme_miner_data_bridge]] | **数据桥**：6 类数据需求 → a-stock-data 函数映射；涨停池/跌停池补充端点；市场情绪汇总 |
+| [[theme_miner_data_bridge]] | **数据桥**：6 类数据需求 → a-stock-data 函数映射（涨停/跌停池用 Layer 8 `em_zt_pool`/`em_dt_pool`）；市场情绪汇总 + 板块成分股为本层补充 |
 | [[theme_miner_theme_scoring]] | 题材三维评分模型、生命周期判定、题材级别分类、Top3 筛选 |
 | [[theme_miner_stock_scoring]] | 个股五维评分模型、龙头标注、风险标注、Top5 筛选 |
 | [[theme_miner_price_prediction]] | 中长期价格预测（⚠️ 启发式）、置信度、操作策略、风险提示 |

@@ -132,6 +132,9 @@ pip3 install httpx pandas openpyxl --user
 | 19 | A 股**个股新闻、财联社快讯、东财全球资讯**（mx 资讯搜索配额耗尽时降级） | A股新闻层 | `references/a_stock_news.md` | 内嵌 Python（D） |
 | 20 | A 股**财务 37 字段、F10 九大类、新浪三表**（mx 金融数据查询配额耗尽时降级） | A股基础数据层 | `references/a_stock_fundamentals.md` | 内嵌 Python（D） |
 | 21 | A 股**巨潮公告全文检索**（mx 资讯搜索配额耗尽时降级） | A股公告层 | `references/a_stock_filings.md` | 内嵌 Python（D） |
+| 23 | A 股**打板**：涨停/炸板/跌停/昨日涨停四池、同花顺涨停揭秘（涨停原因题材+封板成功率+板型）、打板情绪速算（炸板率/连板高度/梯队） | A股打板层（V3.3.0） | `references/a_stock_limit_up.md` | 内嵌 Python（D） |
+| 24 | A 股 **ETF 期权**：50/300/科创50/500ETF 合约清单、T型报价、希腊字母（Delta/Gamma/Theta/Vega+IV+理论价） | A股ETF期权层（V3.3.0） | `references/a_stock_etf_options.md` | 内嵌 Python（D） |
+| 25 | A 股**舆情互动**：巨潮互动易问答（投资者提问+公司回复）、同花顺热榜、东财人气榜、个股概念命中 | A股舆情互动层（V3.3.0） | `references/a_stock_sentiment.md` | 内嵌 Python（D） |
 | 22 | A 股**完整题材挖掘流水线**：题材 Top3 + 个股 Top5 + 目标价 + 操作策略（建立在 a-stock-data 之上的分析层；#12 热点发现配额耗尽时降级到这里） | 题材挖掘分析层 | `references/theme_miner.md` | 内嵌 Python（D，经 data_bridge 调 a-stock-data） |
 
 **路由冲突时的优先级规则**：
@@ -457,6 +460,9 @@ python3 -u {baseDir}/scripts/.../get_data.py ...
 - `references/a_stock_news.md` — Layer 5 新闻层（东财个股新闻 + 财联社快讯 + 全球资讯）
 - `references/a_stock_fundamentals.md` — Layer 6 基础数据层（mootdx 财务 37 字段/F10 + 东财个股基本面 + 新浪三表）
 - `references/a_stock_filings.md` — Layer 7 公告层（巨潮公告全文检索）
+- `references/a_stock_limit_up.md` — Layer 8 打板层（涨停/炸板/跌停/昨日涨停四池 + 同花顺涨停揭秘 + 打板情绪，V3.3.0）
+- `references/a_stock_etf_options.md` — Layer 9 ETF期权层（合约清单 + T型报价 + 希腊字母/IV，V3.3.0）
+- `references/a_stock_sentiment.md` — Layer 10 舆情互动层（互动易问答 + 同花顺热榜 + 东财人气榜，V3.3.0）
 
 ### 题材挖掘分析层（仅 A 股，#22，建立在 a-stock-data 之上）
 

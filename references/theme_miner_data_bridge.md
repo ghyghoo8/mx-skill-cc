@@ -1,10 +1,10 @@
 ---
 name: theme_miner_data_bridge
-description: 热门题材挖掘的数据桥 — 把题材挖掘的 6 类数据需求映射到 a-stock-data 的内嵌 Python 函数；并提供 a-stock-data 暂缺的「涨停池/跌停池/市场情绪」补充端点（option A：端点在本层，a-stock-data 不动）。
+description: 热门题材挖掘的数据桥 — 把题材挖掘的 6 类数据需求映射到 a-stock-data 的内嵌 Python 函数；涨停/跌停池复用 a-stock-data v3.3.0 官方 Layer 8（em_zt_pool/em_dt_pool），仅市场情绪汇总与板块成分股为本层补充。
 metadata:
   layer: theme-miner（a-stock-data 之上的可选分析层）
-  depends_on: a_stock_data_common, a_stock_signals, a_stock_capital_flow, a_stock_fundamentals, a_stock_market_data, a_stock_research
-  mx_skills_note: "本文件为 mx-skills 原创桥接层，非 upstream vendored。补充端点 2026-06-10 实测可用。"
+  depends_on: a_stock_data_common, a_stock_signals, a_stock_capital_flow, a_stock_fundamentals, a_stock_market_data, a_stock_research, a_stock_limit_up
+  mx_skills_note: "本文件为 mx-skills 原创桥接层。2026-06-28 起涨停/跌停池复用上游 Layer 8 em_zt_pool/em_dt_pool（之前是本层自建 theme_miner_zt_pool/dt_pool，上游 v3.3.0 出官方版后去重）；仅 market_breadth + board_members 仍为本层补充。"
 ---
 
 > **作用**：题材挖掘分析层（[[theme_miner]]）本身不取数。本文件把它需要的 6 类数据，逐一映射到 **a-stock-data 已有的内嵌 Python 函数**（约定 D：读 reference → `python3 -c` 执行 → 返回 Python 值）。a-stock-data 暂时没有的「涨停股列表 / 跌停 / 全市场涨跌家数」，由本层**自带补充端点**补齐——**不修改 a-stock-data 任何文件**（保持其按上游 diff 独立升级的能力）。
@@ -21,86 +21,26 @@ metadata:
 | 2 | 板块成分股（行情、市值、换手、量比） | **本层补充** | `theme_miner_board_members(bk_code)` ↓（东财 clist `fs=b:BK####`，板块→成分股；a-stock-data 无此函数）；个股行情/市值再用腾讯 `tencent_quote`（`a_stock_market_data`） |
 | 3 | 个股资金流向（近 N 日主力净流入） | a-stock-data | `a_stock_capital_flow` `stock_fund_flow_120d()` 或 `a_stock_signals` `eastmoney_fund_flow_minute()` |
 | 4 | 个股基本面（PE/PB/ROE/营收增速/净利增速/市值） | a-stock-data | `a_stock_fundamentals` `eastmoney_stock_info()` + 腾讯 `tencent_quote()`（PE/PB/市值）；增速用新浪三表 `sina_financial_report()` |
-| 5 | **涨停股列表**（涨停原因/连板/封单金额） | **本层补充** | `theme_miner_zt_pool()` ↓（东财涨停池，含 `hybk` 行业归属） |
-| 6 | **跌停股列表 + 全市场涨跌家数 + 涨停数** | **本层补充** | `theme_miner_dt_pool()` + `theme_miner_market_breadth()` ↓ |
+| 5 | **涨停股列表**（涨停原因/连板/封单/炸板/行业） | a-stock-data（**v3.3.0 Layer 8**） | `a_stock_limit_up` `em_zt_pool(date)`（含 `industry`=hybk 行业归属、`limit_days` 连板、`zt_stat` 几天几板）；炸板/昨涨停用 `em_zb_pool`/`em_yzt_pool` |
+| 6 | **跌停股列表 + 全市场涨跌家数** | 混合 | 跌停 → a-stock-data `a_stock_limit_up` `em_dt_pool(date)`；全市场涨跌家数 → 本层 `theme_miner_market_breadth()` ↓（a-stock-data 无） |
 
 > 资金趋势判定（持续流入/今日流入/流出）、PE 换算等清洗规则沿用上游 data_sources.md 口径，在打分前由模型对返回值计算。
 
 ---
 
-## 补充端点 1：涨停池（含连板 / 封单 / 行业归属）
+## 涨停池 / 跌停池 → 复用 a-stock-data Layer 8（不再本层自建）
 
-东财涨停池 `push2ex.eastmoney.com/getTopicZTPool`，零鉴权，返回当日全部涨停股。`hybk` 字段给出行业板块归属，可直接用于「涨停股 → 题材」匹配（替代上游靠"涨停原因文本关键词匹配"的脆弱做法）。
-
-```python
-# 前置：先执行 a_stock_data_common 的「共用 helper」代码块拿到 em_get / UA
-import time
-from datetime import datetime
-
-def theme_miner_zt_pool(date: str | None = None) -> list[dict]:
-    """东财涨停池。date 形如 '20260610'，默认取今天。
-    返回: [{code, name, pct, lbc(连板次数), turnover_hs, seal_fund(封单元), industry(hybk), zt_stat}]
-    注：交易日盘后数据最全；非交易日/盘前可能为空。"""
-    date = date or datetime.now().strftime("%Y%m%d")
-    r = em_get(
-        "https://push2ex.eastmoney.com/getTopicZTPool",
-        params={"ut": "7eea3edcaed734bea9cbfc24409ed989", "dpt": "wz.ztzt",
-                "Pageindex": "0", "pagesize": "200", "sort": "fbt:asc", "date": date},
-        headers={"Referer": "https://quote.eastmoney.com/"}, timeout=12,
-    )
-    pool = (r.json().get("data") or {}).get("pool") or []
-    rows = []
-    for x in pool:
-        zt = x.get("zttj") or {}
-        rows.append({
-            "code": x.get("c", ""),
-            "name": x.get("n", ""),
-            "pct": x.get("zdp"),                 # 涨跌幅 %
-            "lbc": x.get("lbc", 1),              # 连板次数
-            "turnover_hs": x.get("hs"),          # 换手率 %
-            "seal_fund": x.get("fund"),          # 封单金额（元）
-            "industry": x.get("hybk", ""),       # 行业板块归属（题材匹配用）
-            "zt_stat": {"days": zt.get("days"), "ct": zt.get("ct")},  # 涨停统计 N天M板
-        })
-    return rows
-
-# 用法
-zt = theme_miner_zt_pool()
-print(f"今日涨停 {len(zt)} 只")
-for s in zt[:5]:
-    print(f"  {s['code']} {s['name']} {s['pct']}% {s['lbc']}板 行业={s['industry']} 封单={s['seal_fund']/1e8:.2f}亿" if s['seal_fund'] else f"  {s['code']} {s['name']}")
-```
-
-> **实测（2026-06-10）**：返回 20+ 涨停股，字段 `c/n/zdp/lbc/hs/fund/hybk/zttj` 齐全。
+> **2026-06-28 去重（option A）**：a-stock-data **v3.3.0 新增 Layer 8 打板层**已提供官方涨停/跌停池端点，本层不再自建（旧 `theme_miner_zt_pool`/`theme_miner_dt_pool` 已删）。直接读 [[a_stock_limit_up]] 用：
+>
+> - **涨停池** `em_zt_pool(date)` → `[{code, name, price, pct, limit_days(连板), seal_fund(封板资金), break_times(炸板), industry(hybk), zt_stat(几天几板), ...}]`
+> - **炸板池** `em_zb_pool(date)`、**昨日涨停池** `em_yzt_pool(date)`（晋级率/赚钱效应）、**跌停池** `em_dt_pool(date)`
+> - 同花顺涨停揭秘 `ths_limit_up_pool(date)`（涨停原因题材 + 封板成功率 + 板型）
+>
+> `date` 必传（形如 `'20260628'`，交易日；非交易日返回空）。`industry` 字段即题材匹配用的行业归属（下文「涨停股 → 题材匹配」直接用它）。
 
 ---
 
-## 补充端点 2：跌停池
-
-```python
-# 前置：先执行 a_stock_data_common 的「共用 helper」代码块
-from datetime import datetime
-
-def theme_miner_dt_pool(date: str | None = None) -> list[dict]:
-    """东财跌停池。返回 [{code, name, pct}]。绿盘日可能为 0。"""
-    date = date or datetime.now().strftime("%Y%m%d")
-    r = em_get(
-        "https://push2ex.eastmoney.com/getTopicDTPool",
-        params={"ut": "7eea3edcaed734bea9cbfc24409ed989", "dpt": "wz.dtzt",
-                "Pageindex": "0", "pagesize": "200", "sort": "fund:asc", "date": date},
-        headers={"Referer": "https://quote.eastmoney.com/"}, timeout=12,
-    )
-    pool = (r.json().get("data") or {}).get("pool") or []
-    return [{"code": x.get("c", ""), "name": x.get("n", ""), "pct": x.get("zdp")} for x in pool]
-
-# 用法
-dt = theme_miner_dt_pool()
-print(f"今日跌停 {len(dt)} 只")
-```
-
----
-
-## 补充端点 3：全市场涨跌家数（市场情绪）
+## 补充端点 1：全市场涨跌家数（市场情绪，a-stock-data 无）
 
 不做 5000+ 个股逐页扫描，而是**汇总东财行业板块的每板块涨跌家数**（`m:90+t:2`，字段 `f104`=上涨家数、`f105`=下跌家数）。行业板块是全市场个股的一个划分（每只股票属于且仅属于一个行业），故求和即全市场涨跌家数——单次请求。
 
@@ -125,9 +65,13 @@ def theme_miner_market_breadth() -> dict:
 
 def theme_miner_sentiment(date: str | None = None) -> dict:
     """组装市场情绪：涨停数/跌停数/涨跌家数/情绪评级。
-    情绪评级口径见 theme_miner_execution.md。"""
-    zt = theme_miner_zt_pool(date)
-    dt = theme_miner_dt_pool(date)
+    情绪评级口径见 theme_miner_execution.md。
+    涨停/跌停池复用 a-stock-data Layer 8（先读 a_stock_limit_up 执行其代码块拿到
+    em_zt_pool/em_dt_pool）。"""
+    from datetime import datetime
+    date = date or datetime.now().strftime("%Y%m%d")
+    zt = em_zt_pool(date)          # a_stock_limit_up（Layer 8）
+    dt = em_dt_pool(date)          # a_stock_limit_up（Layer 8）
     breadth = theme_miner_market_breadth()
     n_zt, n_dt = len(zt), len(dt)
     up, down, ratio = breadth["up"], breadth["down"], breadth["ratio"]
@@ -148,7 +92,7 @@ print(theme_miner_sentiment())
 
 ---
 
-## 补充端点 4：板块成分股（板块 → 成分股）
+## 补充端点 2：板块成分股（板块 → 成分股）
 
 ⚠️ **务必区分**：a-stock-data v3.2.2 的 `eastmoney_concept_blocks(code)` 是「**个股 → 所属板块**」（输入股票代码，返回它属于哪些板块），**不是**「板块 → 成分股」。Step 4 选 Top3 题材的候选股需要后者，a-stock-data 无此函数，故本层补充（东财 clist `fs=b:{BK码}`）。
 
@@ -187,13 +131,15 @@ print(f"{len(members)} 只成分股 top={members[0]['name'] if members else '-'}
 
 上游用「涨停原因文本是否含板块名关键词」匹配，易漏。本层改用「**逐只涨停股归票到板块再计数**」（基于 v3.2.2 的「股→板块」语义，方向正确）：
 
-1. **行业归属直配（快）**：`theme_miner_zt_pool()` 每只涨停股的 `industry`(hybk) 字段直接给出其东财行业板块名——与 Step 2 的行业板块名精确匹配，按行业累计涨停家数。
+1. **行业归属直配（快）**：`em_zt_pool(date)`（a-stock-data Layer 8）每只涨停股的 `industry`(hybk) 字段直接给出其东财行业板块名——与 Step 2 的行业板块名精确匹配，按行业累计涨停家数。
 2. **板块归属精算（全）**：对每只涨停股 `c`，调用 `eastmoney_concept_blocks(c)` 得其 `concept_tags`（所属行业+概念+地域板块名列表），把该股计入这些板块——遍历完涨停池后，每个板块名累计到的涨停股数即「涨停家数」。这覆盖概念/地域板块（非仅行业），是题材三维评分「驱动强度/可持续性」的涨停家数输入（见 [[theme_miner_theme_scoring]]）。
 
 ```python
 # 涨停家数按板块归票（方向：每只涨停股 → 它所属的板块们）
+# 前置：读 a_stock_limit_up 执行 em_zt_pool；读 a_stock_signals 执行 eastmoney_concept_blocks
 from collections import Counter
-zt = theme_miner_zt_pool()
+from datetime import datetime
+zt = em_zt_pool(datetime.now().strftime("%Y%m%d"))   # a-stock-data Layer 8
 board_zt = Counter()
 for s in zt:
     if s["industry"]:
